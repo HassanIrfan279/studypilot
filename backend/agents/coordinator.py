@@ -5,9 +5,13 @@ from zoneinfo import ZoneInfo
 
 import db
 from activity_log import announce, log, refresh
+from agents import brain
 from agents import planner_agent as planner
-from config import TIMEZONE
+from config import AGENT_BRAIN, TIMEZONE
+from tools import audit_tools as audit
+from tools import calendar_tools as cal
 from tools import study_tools as st
+from tools import telegram_tools as tg
 
 
 def _when(iso):
@@ -46,6 +50,12 @@ def warm_up(max_files=8):
         _analyze(fid, m["title"] if m else fid)
     log("Coordinator", "Lectures ready. Asking Planner to book study time, most urgent first.")
     planner.plan_unplanned()
+    sync_deadline_markers()
+    for it in upcoming:
+        try:
+            audit.audit_item(it)
+        except Exception as e:
+            log("Coordinator", f"Audit failed for '{it['title']}': {e}", "warn")
     for it in upcoming:
         try:
             st.build_prep_pack(it["id"])
@@ -55,6 +65,50 @@ def warm_up(max_files=8):
     log("Coordinator", "✅ All set: lectures analyzed, study plan booked, prep packs ready.",
         "success")
     refresh()
+
+
+def sync_deadline_markers(items=None):
+    """Put every upcoming deadline into Google Calendar as a '🎯 DUE' marker (instant, no AI)."""
+    items = items if items is not None else [i for i in st.upcoming_items(30) if i["due"]]
+    for it in items:
+        try:
+            res = cal.upsert_deadline_event(it, st.course_name(it["course_id"]))
+            if res in ("created", "moved"):
+                log("Planner", f"📅 Deadline marker {res} in Google Calendar: {it['title']} "
+                               f"({_when(it['due'])}).", "success")
+        except Exception as e:
+            log("Planner", f"Couldn't update the Calendar marker for '{it['title']}': {e}", "warn")
+
+
+def _situation(changes):
+    lines = []
+    for c in changes:
+        it = c.get("item")
+        if c["type"] == "added":
+            lines.append(f"- NEW {it['kind']} item_id={it['id']} '{it['title']}' in "
+                         f"{st.course_name(it['course_id'])}, due {_when(it['due'])}. "
+                         f"Teacher's words: {it.get('description', '')[:200]}")
+        elif c["type"] == "due_changed":
+            lines.append(f"- MOVED item_id={it['id']} '{it['title']}' "
+                         f"({st.course_name(it['course_id'])}) from {_when(c['old_due'])} to "
+                         f"{_when(it['due'])}. Teacher's words: {it.get('description', '')[:200]}")
+        elif c["type"] == "removed":
+            reason = db.kv_get(f"cancel_reason:{it['id']}") or "removed from Classroom"
+            lines.append(f"- CANCELLED item_id={it['id']} '{it['title']}' "
+                         f"({st.course_name(it['course_id'])}). Reason: {reason}")
+        elif c["type"] == "new_material" and _is_recent(c["material"].get("created")):
+            m = c["material"]
+            lines.append(f"- NEW LECTURE file_id={m['file_id']} '{m['title']}' in "
+                         f"{st.course_name(m['course_id'])}")
+    return "\n".join(lines)
+
+
+def _title(changes):
+    c = next((c for c in changes if c["type"] in ("due_changed", "added", "removed")), changes[0])
+    if c["type"] == "new_material":
+        return f"New lecture: {c['material']['title']}"
+    verb = {"added": "New", "due_changed": "Moved", "removed": "Cancelled"}[c["type"]]
+    return f"{verb}: {c['item']['title']} ({st.course_name(c['item']['course_id'])})"
 
 
 def handle(result):
@@ -70,6 +124,52 @@ def handle(result):
     if not changes:
         return
 
+    # 1) Instant: every deadline change goes into Google Calendar right now
+    for c in changes:
+        if c["type"] == "new_material":
+            for row in db.query("SELECT id FROM items WHERE course_id=? AND active=1",
+                                (c["material"]["course_id"],)):
+                db.cache_delete(f"prep:{row['id']}")  # prep packs must include the new lecture
+            continue
+        it = c.get("item")
+        if c["type"] in ("added", "due_changed") and it.get("due"):
+            sync_deadline_markers([it])
+        elif c["type"] == "removed":
+            try:
+                if cal.delete_deadline_event(it["id"]):
+                    log("Planner", f"📅 Removed the deadline marker for '{it['title']}' from Calendar.")
+            except Exception as e:
+                log("Planner", f"Couldn't remove marker: {e}", "warn")
+    refresh()
+
+    # 2) Auditor: re-read the full source for every new/moved deadline before acting on it
+    audit_notes = []
+    for c in changes:
+        if c["type"] in ("added", "due_changed"):
+            try:
+                issues = audit.audit_item(c["item"])
+            except Exception as e:
+                issues = []
+                log("Coordinator", f"Audit failed for '{c['item']['title']}': {e}", "warn")
+            if issues:
+                audit_notes.append(f"- AUDITOR FLAGS for item_id={c['item']['id']}: " + " | ".join(issues))
+    refresh()
+
+    # 3) Gemini decides what to do about it (falls back to fixed rules if Gemini is down)
+    situation = _situation(changes)
+    if not situation:
+        return
+    if audit_notes:
+        situation += ("\n\nThe auditor re-read the full source and raised these issues. If a date "
+                      "looks wrong, ask the student before relying on it:\n" + "\n".join(audit_notes))
+    if AGENT_BRAIN and brain.think_and_act("classroom", _title(changes),
+                                           "Google Classroom just changed:\n" + situation):
+        return
+    _rule_based(changes)
+
+
+def _rule_based(changes):
+    """Backup plan: fixed pipeline used only if Gemini is unavailable."""
     spoken = []
     # 1) New lectures first — plans and prep packs depend on them
     for c in [c for c in changes if c["type"] == "new_material"]:
@@ -132,4 +232,5 @@ def handle(result):
     db.cache_delete("brief")
     for s in spoken:
         announce(s)
+        tg.send(f"📘 <b>StudyPilot</b>\n{s}")
     refresh()

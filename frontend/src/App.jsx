@@ -74,7 +74,7 @@ function Toast() {
   )
 }
 
-function Shell() {
+function Shell({ me }) {
   const { connected } = useLive()
   const [syncing, setSyncing] = useState(false)
   const nav = ({ isActive }) =>
@@ -108,6 +108,15 @@ function Shell() {
         </div>
       </header>
       <Toast />
+      {me?.needs_upgrade && (
+        <div className="bg-amber-100 border-b border-amber-300 text-amber-950">
+          <div className="max-w-[1680px] mx-auto px-6 py-2.5 flex items-center gap-3 flex-wrap">
+            <ShieldCheck size={20} />
+            <span className="font-semibold">StudyPilot can now read class emails and organize your Drive notes. Sign in once more to allow it.</span>
+            <a href={loginUrl} className="btn-primary !py-1.5 ml-auto">Sign in again</a>
+          </div>
+        </div>
+      )}
       <div className="max-w-[1680px] mx-auto px-6 py-7 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_440px] gap-7">
         <main className="min-w-0">
           <Routes>
@@ -141,7 +150,7 @@ export default function App() {
   if (!me.logged_in) return <Login />
   return (
     <LiveProvider>
-      <Shell />
+      <Shell me={me} />
     </LiveProvider>
   )
 }

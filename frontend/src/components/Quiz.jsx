@@ -2,17 +2,23 @@ import { useState } from 'react'
 import { Lightbulb } from 'lucide-react'
 
 // In-app MCQ quiz. Calls onFinish(score 0..1) when submitted.
-export default function Quiz({ questions = [], onFinish, title = 'Practice quiz' }) {
+export default function Quiz({ questions = [], onFinish, onNewQuestions, title = 'Practice quiz' }) {
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [loadingNew, setLoadingNew] = useState(false)
   if (!questions.length) return <p className="text-slate-500">No questions yet.</p>
 
   const correct = questions.filter((q, i) => answers[i] === q.correct_index).length
   const submit = () => {
     setSubmitted(true)
-    onFinish?.(correct / questions.length)
+    const wrong = questions.filter((q, i) => answers[i] !== q.correct_index).map((q) => q.question)
+    onFinish?.(correct / questions.length, wrong)
   }
   const reset = () => { setAnswers({}); setSubmitted(false) }
+  const fresh = async () => {
+    setLoadingNew(true)
+    try { await onNewQuestions(); reset() } finally { setLoadingNew(false) }
+  }
 
   return (
     <div className="space-y-5">
@@ -47,10 +53,18 @@ export default function Quiz({ questions = [], onFinish, title = 'Practice quiz'
           Submit answers ({Object.keys(answers).length}/{questions.length})
         </button>
       ) : (
-        <div className="card flex items-center gap-4 !bg-emerald-50 !border-emerald-300">
-          <span className="text-3xl font-extrabold">{correct}/{questions.length}</span>
-          <span className="text-lg">Score saved — your readiness has been updated.</span>
-          <button className="btn-ghost ml-auto" onClick={reset}>Try again</button>
+        <div className={`card flex items-center gap-4 flex-wrap ${correct / questions.length >= 0.6 ? '!bg-emerald-50 !border-emerald-300' : '!bg-red-50 !border-red-300'}`}>
+          <span className="text-3xl font-extrabold tabular">{correct}/{questions.length}</span>
+          <span className="text-lg flex-1 min-w-[14rem]">
+            {correct / questions.length >= 0.6
+              ? 'Score saved. Your readiness is updated.'
+              : 'Not good enough yet. The agent is booking extra time on what you missed.'}
+          </span>
+          {onNewQuestions && (
+            <button className="btn-primary" onClick={fresh} disabled={loadingNew}>
+              {loadingNew ? 'Writing new questions…' : 'Retake with new questions'}
+            </button>
+          )}
         </div>
       )}
     </div>

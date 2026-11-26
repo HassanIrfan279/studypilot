@@ -12,6 +12,7 @@ export default function PrepPack() {
   const [pack, setPack] = useState(null)
   const [error, setError] = useState(null)
   const quizRef = useRef(null)
+  const [quizVersion, setQuizVersion] = useState(0)
 
   const load = (refresh = false) => {
     setError(null)
@@ -22,8 +23,8 @@ export default function PrepPack() {
     if (pack && params.get('quiz')) quizRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [pack, params])
 
-  const finish = async (score) => {
-    const r = await api.post(`/api/quiz/${id}/result`, { score })
+  const finish = async (score, wrong) => {
+    const r = await api.post(`/api/quiz/${id}/result`, { score, wrong })
     setPack((p) => ({ ...p, readiness: r }))
   }
 
@@ -92,7 +93,13 @@ export default function PrepPack() {
       )}
 
       <section ref={quizRef}>
-        <Quiz questions={pack.quiz?.questions || []} onFinish={finish} title="Practice quiz from your lectures" />
+        <Quiz key={quizVersion} questions={pack.quiz?.questions || []} onFinish={finish}
+          onNewQuestions={async () => {
+            const q = await api.get(`/api/quiz/${id}/new`)
+            setPack((p) => ({ ...p, quiz: q }))
+            setQuizVersion((v) => v + 1)
+          }}
+          title={quizVersion ? `Retake #${quizVersion}: new questions on your weak spots` : 'Practice quiz from your lectures'} />
       </section>
     </div>
   )

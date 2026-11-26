@@ -72,14 +72,23 @@ def create_study_plan(assessment_id, reason=""):
     course = st.course_name(item["course_id"])
     log("Planner", f"'{item['title']}' needs ~{hours:g}h → {n} session(s) of {length} min.")
 
-    # Try to finish a day early; fall back to "before the deadline".
+    # Try to finish a day early; fall back to "before the deadline"; when time is tight,
+    # squeeze in shorter sessions (60, then 45 min) instead of giving up.
     chosen = []
     for target in (due - timedelta(days=1), due - timedelta(hours=1)):
         slots = cal.get_free_slots(now, target)
-        chosen = _pick(slots, n, length) or []
-        if len(chosen) < n:
-            chosen = _pick(slots, n, length, one_per_day=False)
-        if len(chosen) >= n:
+        for size in dict.fromkeys([length, 60, 45]):
+            want = max(n, math.ceil(hours * 60 / size)) if size < length else n
+            want = min(want, 4)
+            chosen = _pick(slots, want, size) or []
+            if len(chosen) < want:
+                chosen = _pick(slots, want, size, one_per_day=False)
+            if chosen:
+                if size < length:
+                    log("Planner", f"Time is tight before '{item['title']}': using {size}-min "
+                                   "sessions instead.", "warn")
+                break
+        if len(chosen) >= n or (chosen and target == due - timedelta(hours=1)):
             break
     if not chosen:
         log("Planner", f"No free time left before '{item['title']}'. Suggest: shorten sessions, "
@@ -102,6 +111,8 @@ def replan(assessment_id, reason=""):
     """Delete only StudyPilot's future events for this assessment, then plan again."""
     item = st.get_item(assessment_id)
     events = cal.list_studypilot_events(assessment_id)
+    old = [(datetime.fromisoformat(e["start"]["dateTime"]), datetime.fromisoformat(e["end"]["dateTime"]),
+            e.get("summary", "")) for e in events]
     for ev in events:
         cal.delete_study_event(ev["id"])
     # forget local future sessions that were removed
@@ -109,9 +120,21 @@ def replan(assessment_id, reason=""):
                (assessment_id, datetime.now(timezone.utc).isoformat()))
     if events:
         log("Planner", f"Removed {len(events)} old session(s) for '{item['title']}'.")
-    if item and item["active"]:
-        return create_study_plan(assessment_id, reason)
-    return {"ok": True, "sessions": 0}
+    if not (item and item["active"]):
+        return {"ok": True, "sessions": 0}
+    res = create_study_plan(assessment_id, reason)
+    if not res.get("ok") and old:
+        # Safety net: never leave the student with fewer sessions than before.
+        due = datetime.fromisoformat(item["due"]) if item.get("due") else None
+        kept = [(s, e) for s, e, _ in old if not due or e <= due]
+        for i, (s, e) in enumerate(kept, 1):
+            cal.create_study_event(item, st.course_name(item["course_id"]), s, e, i, len(kept))
+        if kept:
+            log("Planner", f"Couldn't find a better plan, so I restored {len(kept)} session(s) "
+                           f"for '{item['title']}'.", "warn")
+            res = {"ok": True, "sessions": len(kept), "restored": True,
+                   "when": ", ".join(s.strftime("%a %H:%M") for s, _ in kept)}
+    return res
 
 
 def priority_score(item):

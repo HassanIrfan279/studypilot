@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import db
 from activity_log import log
-from agents import coordinator, sync_agent
+from agents import coordinator, sync_agent, watcher
 from auth import get_credentials
 from config import SYNC_INTERVAL_SECONDS, TIMEZONE
 
@@ -33,6 +33,10 @@ def sync_once(verbose=False):
         if n or verbose:
             log("Sync", f"Sync done: {n} change(s) found.", "success" if n else "info")
         coordinator.handle(result)
+        watcher.tick()  # react to the student's own calendar, missed sessions
+        if not db.kv_get("markers_synced"):
+            coordinator.sync_deadline_markers()  # one-time: put existing deadlines in Calendar
+            db.kv_set("markers_synced", True)
         return {"ok": True, "changes": n}
     except Exception as e:
         log("Sync", f"Classroom unreachable ({type(e).__name__}) — showing last sync from {_ago()}.",

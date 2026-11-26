@@ -51,7 +51,8 @@ def get_credentials() -> Credentials | None:
     info = db.kv_get("token")
     if not info:
         return None
-    creds = Credentials.from_authorized_user_info(info, SCOPES)
+    # Use the scopes the student actually granted (refresh fails if we ask for more)
+    creds = Credentials.from_authorized_user_info(info, info.get("scopes") or SCOPES)
     if not creds.valid and creds.refresh_token:
         creds.refresh(Request())
         _save(creds)

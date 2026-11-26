@@ -15,7 +15,10 @@ import auth
 import db
 import scheduler
 from activity_log import log
-from agents import chat_agent, coordinator, planner_agent, voice_agent
+import runs
+from agents import chat_agent, coordinator, planner_agent, voice_agent, watcher
+from tools import audit_tools as audit
+from tools import telegram_tools as tg
 from config import FRONTEND_URL, TIMEZONE
 from google_clients import NotLoggedIn
 from tools import calendar_tools as cal
@@ -86,7 +89,12 @@ def logout():
 @app.get("/api/me")
 async def me():
     creds = await run(auth.get_credentials)
-    return {"logged_in": bool(creds), "last_sync": db.kv_get("last_sync")}
+    granted = set((db.kv_get("token") or {}).get("scopes") or [])
+    from config import SCOPES
+    needs_upgrade = bool(creds) and any(s not in granted for s in SCOPES
+                                        if "gmail" in s or "drive.file" in s)
+    return {"logged_in": bool(creds), "last_sync": db.kv_get("last_sync"),
+            "needs_upgrade": needs_upgrade, "profile_done": bool(db.kv_get("profile"))}
 
 
 # ---------- dashboard ----------
@@ -104,6 +112,9 @@ async def dashboard():
     for i in items:
         i["color"] = colors.get(i["course_id"], "#3f51b5")
         i["priority"] = planner_agent.priority_score(i)
+        i["flags"] = db.kv_get(f"flags:{i['id']}") or []
+        i["sessions"] = db.one("SELECT COUNT(*) n FROM sessions WHERE assessment_id=? AND done=0 "
+                               "AND end>?", (i["id"], datetime.now(ZoneInfo(TIMEZONE)).isoformat()))["n"]
     return {"items": items, "courses": _courses(), "last_sync": db.kv_get("last_sync")}
 
 
@@ -159,13 +170,33 @@ async def prep(assessment_id: str, refresh: bool = False):
 
 class ScoreIn(BaseModel):
     score: float  # 0..1
+    wrong: list[str] = []  # questions the student got wrong
 
 
 @app.post("/api/quiz/{assessment_id}/result")
-def quiz_result(assessment_id: str, body: ScoreIn):
-    st.save_quiz_result(assessment_id, body.score)
+async def quiz_result(assessment_id: str, body: ScoreIn):
+    st.save_quiz_result(assessment_id, body.score, body.wrong)
     activity_log.refresh()
+    if body.score < 0.6:  # weak result -> the agent reacts on its own
+        asyncio.create_task(run(watcher.on_quiz_result, assessment_id, body.score, body.wrong))
     return st.readiness(assessment_id)
+
+
+@app.get("/api/runs")
+def agent_runs():
+    return runs.recent(15)
+
+
+@app.get("/api/telegram")
+async def telegram_status():
+    return await run(tg.status)
+
+
+@app.post("/api/telegram/test")
+async def telegram_test():
+    ok = await run(tg.send, "📘 <b>StudyPilot</b> is connected. I'll message you here when "
+                            "your plan changes.")
+    return {"sent": ok}
 
 
 @app.get("/api/panic/{assessment_id}")
@@ -211,10 +242,69 @@ async def replan(assessment_id: str):
     return res
 
 
+@app.get("/api/quiz/{assessment_id}/new")
+async def new_quiz(assessment_id: str, n: int = 8):
+    """Retake: a brand-new set of questions aimed at previous mistakes."""
+    log("Tutor", "Writing a brand-new quiz aimed at your previous mistakes…")
+    return await run(st.fresh_questions, assessment_id, n, "retake")
+
+
+@app.post("/api/sessions/{event_id}/check")
+async def session_check(event_id: str):
+    """Strict teacher: before a session counts as done, prove it with 3 fresh questions."""
+    s = db.one("SELECT * FROM sessions WHERE event_id=?", (event_id,))
+    if not s:
+        return JSONResponse({"error": "unknown session"}, status_code=404)
+    log("Tutor", "Session marked done — not so fast. Generating a 3-question check first.")
+    return await run(st.fresh_questions, s["assessment_id"], 3, "check")
+
+
+class CheckIn(BaseModel):
+    score: float
+    wrong: list[str] = []
+
+
+@app.post("/api/sessions/{event_id}/verify")
+async def session_verify(event_id: str, body: CheckIn):
+    s = db.one("SELECT * FROM sessions WHERE event_id=?", (event_id,))
+    if not s:
+        return JSONResponse({"error": "unknown session"}, status_code=404)
+    st.save_quiz_result(s["assessment_id"], body.score, body.wrong)
+    if body.score >= 0.66:
+        db.execute("UPDATE sessions SET done=1 WHERE event_id=?", (event_id,))
+        log("Tutor", f"✔ Check passed ({round(body.score * 3)}/3). Session counts as done.", "success")
+        msg = "Good. That session counts. Readiness updated."
+        passed = True
+    else:
+        log("Tutor", f"✘ Check failed ({round(body.score * 3)}/3). Session NOT counted.", "warn")
+        msg = ("Not convinced. You didn't really cover this yet, so the session doesn't count. "
+               "Review the prep pack and try the check again.")
+        passed = False
+        asyncio.create_task(run(watcher.on_quiz_result, s["assessment_id"], body.score, body.wrong))
+    activity_log.refresh()
+    return {"passed": passed, "message": msg, "readiness": st.readiness(s["assessment_id"])}
+
+
 @app.post("/api/sessions/{event_id}/done")
 def session_done(event_id: str):
     db.execute("UPDATE sessions SET done=1 WHERE event_id=?", (event_id,))
     log("Planner", "✔ Study session marked done — readiness updated.", "success")
+    activity_log.refresh()
+    return {"ok": True}
+
+
+@app.post("/api/items/{item_id}/audit")
+async def audit_now(item_id: str):
+    item = st.get_item(item_id)
+    issues = await run(audit.audit_item, item)
+    activity_log.refresh()
+    return {"flags": issues}
+
+
+@app.post("/api/items/{item_id}/flags/clear")
+def flags_clear(item_id: str):
+    audit.clear_flag(item_id)
+    log("Coordinator", "Student reviewed the flagged deadline and confirmed it's correct.")
     activity_log.refresh()
     return {"ok": True}
 

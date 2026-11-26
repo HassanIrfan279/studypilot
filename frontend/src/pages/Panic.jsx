@@ -60,7 +60,7 @@ export default function Panic() {
       )}
 
       <Quiz questions={sheet.rapid_quiz} title="Rapid quiz: 5 questions"
-        onFinish={(score) => api.post(`/api/quiz/${id}/result`, { score })} />
+        onFinish={(score, wrong) => api.post(`/api/quiz/${id}/result`, { score, wrong })} />
     </div>
   )
 }

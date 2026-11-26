@@ -1,6 +1,7 @@
 """Tutor tools: lecture analysis, practice quizzes, prep packs, panic mode, readiness, daily brief.
 Every Gemini result is cached in SQLite so the same file is never analyzed twice."""
 import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -206,9 +207,42 @@ def generate_practice_quiz(file_ids, n=8):
     return quiz
 
 
-def save_quiz_result(assessment_id, score):
-    db.execute("INSERT INTO quiz_results(assessment_id, score, ts) VALUES (?,?,?)",
-               (assessment_id, score, datetime.now().timestamp()))
+def fresh_questions(assessment_id, n=8, purpose="retake"):
+    """Brand-new MCQs every call: never repeats a question already asked for this assessment,
+    and targets the concepts behind the student's previous wrong answers."""
+    analyses = _analyses(lectures_for_assessment(assessment_id))
+    if not analyses:
+        return {"questions": []}
+    asked = db.kv_get(f"asked:{assessment_id}") or []
+    pack = db.cache_get(f"prep:{assessment_id}")
+    if pack:
+        asked += [q["question"] for q in pack["quiz"]["questions"]]
+    wrong = []
+    for r in db.query("SELECT wrong FROM quiz_results WHERE assessment_id=? ORDER BY id DESC LIMIT 3",
+                      (assessment_id,)):
+        try:
+            wrong += json.loads(r["wrong"] or "[]")
+        except ValueError:
+            pass
+    focus = ("\nThe student previously got these WRONG — test the same underlying concepts "
+             "again but with different questions, numbers and angles:\n" + "\n".join(f"- {w}" for w in wrong[:8])
+             ) if wrong else ""
+    avoid = "\nDo NOT reuse or rephrase any of these already-asked questions:\n" + \
+            "\n".join(f"- {a}" for a in asked[-40:]) if asked else ""
+    style = ("Short check that the student really studied this session: 3 questions that need "
+             "understanding, not memorization." if purpose == "check" else
+             "A fresh practice quiz, harder than a recall test: include 'why' and applied questions.")
+    quiz = gemini.generate_json(
+        f"{style} Write exactly {n} multiple-choice questions (4 options, one correct) with a "
+        f"one-sentence explanation each, grounded only in this material.{focus}{avoid}\n\n"
+        + _material_text(analyses), Quiz, system=TUTOR_SYSTEM)
+    db.kv_set(f"asked:{assessment_id}", (asked + [q["question"] for q in quiz["questions"]])[-120:])
+    return quiz
+
+
+def save_quiz_result(assessment_id, score, wrong=None):
+    db.execute("INSERT INTO quiz_results(assessment_id, score, ts, wrong) VALUES (?,?,?,?)",
+               (assessment_id, score, datetime.now().timestamp(), json.dumps(wrong or [])))
     log("Tutor", f"Practice quiz scored {round(score * 100)}% — readiness updated.", "success")
 
 

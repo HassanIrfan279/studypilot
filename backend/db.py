@@ -31,6 +31,11 @@ CREATE TABLE IF NOT EXISTS activity (
 
 with _lock:
     _conn.executescript(SCHEMA)
+    # small migrations for columns added later
+    for table, col, typ in [("quiz_results", "wrong", "TEXT"), ("sessions", "focus", "TEXT")]:
+        cols = [r[1] for r in _conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        if col not in cols:
+            _conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
     _conn.commit()
 
 

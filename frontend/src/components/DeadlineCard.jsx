@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, CircleHelp, PencilLine, Search, Siren } from 'lucide-react'
+import { BookOpen, CalendarCheck, Check, CircleHelp, PencilLine, RotateCw, Search, ShieldAlert, Siren } from 'lucide-react'
 import { api, daysLeftLabel, fmtDate, urgencyClass } from '../api'
 import CourseTag from './CourseTag'
 import ReadinessRing from './ReadinessRing'
@@ -8,6 +8,7 @@ import ReadinessRing from './ReadinessRing'
 export default function DeadlineCard({ item, onChange }) {
   const [due, setDue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [auditing, setAuditing] = useState(false)
 
   const saveDue = async () => {
     if (!due) return
@@ -25,6 +26,11 @@ export default function DeadlineCard({ item, onChange }) {
             {item.kind}
           </span>
           {item.due && <span className="text-slate-700 tabular">{fmtDate(item.due)}</span>}
+          {item.due && (
+            <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${item.sessions ? 'text-emerald-800' : 'text-red-800'}`}>
+              <CalendarCheck size={16} /> {item.sessions ? `${item.sessions} session${item.sessions > 1 ? 's' : ''} booked` : 'No study time booked'}
+            </span>
+          )}
           {item.source === 'announcement' && (
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-900 bg-amber-100 px-2 py-1 rounded-md"
               title={item.description || 'Found by Gemini inside a class announcement'}>
@@ -32,6 +38,23 @@ export default function DeadlineCard({ item, onChange }) {
             </span>
           )}
         </div>
+
+        {item.flags?.length > 0 && (
+          <div className="mt-4 p-3.5 bg-red-50 border border-red-300 rounded-xl">
+            <p className="font-bold text-red-950 flex items-center gap-2"><ShieldAlert size={19} /> The auditor wants you to check this</p>
+            <ul className="list-disc pl-6 mt-1 text-red-950">{item.flags.map((f, i) => <li key={i}>{f}</li>)}</ul>
+            <div className="flex gap-2 mt-2.5">
+              <button className="btn-ghost !py-1 !bg-white" disabled={auditing}
+                onClick={async () => { await api.post(`/api/items/${item.id}/flags/clear`); onChange?.() }}>
+                <Check size={16} /> It's correct
+              </button>
+              <button className="btn-ghost !py-1 !bg-white" disabled={auditing}
+                onClick={async () => { setAuditing(true); try { await api.post(`/api/items/${item.id}/audit`); onChange?.() } finally { setAuditing(false) } }}>
+                <RotateCw size={16} className={auditing ? 'animate-spin' : ''} /> Re-check source
+              </button>
+            </div>
+          </div>
+        )}
 
         {!item.due ? (
           <div className="mt-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-center flex-wrap">

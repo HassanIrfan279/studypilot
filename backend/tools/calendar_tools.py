@@ -58,18 +58,30 @@ def get_free_slots(start: datetime, end: datetime):
     return [(s, e) for s, e in free if (e - s) >= timedelta(minutes=30)]
 
 
-def create_study_event(item, course_name, start, end, idx, total):
+def nice_course(name):
+    small = {"and", "of", "the", "in", "on", "for", "to", "a", "an"}
+    return " ".join(w if i and w.lower() in small else (w if w[:1].isupper() else w.capitalize())
+                    for i, w in enumerate((name or "").split()))
+
+
+def create_study_event(item, course_name, start, end, idx, total, focus=None):
     svc = g.calendar()
-    title = f"📘 {course_name} — {item['title']} prep (Session {idx}/{total})"
+    course_name = nice_course(course_name)
+    if focus:
+        title = f"📘 {course_name}: extra session on {focus} ({item['title']})"
+    else:
+        title = f"📘 {course_name}: {item['title']} prep (Session {idx}/{total})"
     body = {
         "summary": title,
-        "description": f"StudyPilot study session.\nPrep pack: {FRONTEND_URL}/prep/{item['id']}\n"
+        "description": f"StudyPilot study session.\n{'Focus: ' + focus + chr(10) if focus else ''}"
+                       f"Prep pack: {FRONTEND_URL}/prep/{item['id']}\n"
                        f"Classroom: {item.get('link', '')}",
         "start": {"dateTime": start.isoformat(), "timeZone": TIMEZONE},
         "end": {"dateTime": end.isoformat(), "timeZone": TIMEZONE},
         "colorId": course_color(item["course_id"]),
         "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 10}]},
-        "extendedProperties": {"private": {"studypilot": "true", "assessment_id": item["id"]}},
+        "extendedProperties": {"private": {"studypilot": "true", "assessment_id": item["id"],
+                                           "kind": "session"}},
     }
     ev = g.with_retry(lambda: svc.events().insert(calendarId="primary", body=body).execute())
     db.execute("INSERT OR REPLACE INTO sessions(event_id, assessment_id, title, start, end, done) "
@@ -78,14 +90,103 @@ def create_study_event(item, course_name, start, end, idx, total):
     return ev
 
 
-def list_studypilot_events(assessment_id=None, future_only=True):
+def list_studypilot_events(assessment_id=None, future_only=True, include_deadlines=False):
+    """StudyPilot's own events. Study sessions only, unless include_deadlines=True."""
     svc = g.calendar()
     props = ["studypilot=true"] + ([f"assessment_id={assessment_id}"] if assessment_id else [])
     kwargs = {"calendarId": "primary", "privateExtendedProperty": props, "singleEvents": True,
               "orderBy": "startTime", "maxResults": 250}
     if future_only:
         kwargs["timeMin"] = datetime.now(timezone.utc).isoformat()
-    return g.with_retry(lambda: svc.events().list(**kwargs).execute()).get("items", [])
+    items = g.with_retry(lambda: svc.events().list(**kwargs).execute()).get("items", [])
+    if include_deadlines:
+        return items
+    return [e for e in items if _kind(e) != "deadline"]
+
+
+def _kind(ev):
+    return ev.get("extendedProperties", {}).get("private", {}).get("kind", "session")
+
+
+# ---------- deadline markers: every deadline itself is visible in Google Calendar ----------
+def upsert_deadline_event(item, course_name):
+    """Create or move the '🎯 DUE' marker for a deadline. Transparent, so it never blocks
+    study planning. Returns 'created' | 'moved' | 'unchanged'."""
+    if not item.get("due"):
+        return "skipped"
+    svc = g.calendar()
+    due = datetime.fromisoformat(item["due"]).astimezone(TZ)
+    start = due - timedelta(minutes=30)
+    body = {
+        "summary": f"🎯 DUE: {item['title']} ({nice_course(course_name)})",
+        "description": f"Deadline tracked by StudyPilot.\nPrep pack: {FRONTEND_URL}/prep/{item['id']}\n"
+                       f"Source: {item.get('link', '')}",
+        "start": {"dateTime": start.isoformat(), "timeZone": TIMEZONE},
+        "end": {"dateTime": due.isoformat(), "timeZone": TIMEZONE},
+        "colorId": course_color(item["course_id"]),
+        "transparency": "transparent",
+        "reminders": {"useDefault": False, "overrides": [{"method": "popup", "minutes": 24 * 60},
+                                                         {"method": "popup", "minutes": 60}]},
+        "extendedProperties": {"private": {"studypilot": "true", "assessment_id": item["id"],
+                                           "kind": "deadline"}},
+    }
+    existing = [e for e in list_studypilot_events(item["id"], future_only=False, include_deadlines=True)
+                if _kind(e) == "deadline"]
+    if existing:
+        ev = existing[0]
+        if ev["start"].get("dateTime") and datetime.fromisoformat(ev["start"]["dateTime"]) == start \
+                and ev.get("summary") == body["summary"]:
+            return "unchanged"
+        g.with_retry(lambda: svc.events().patch(calendarId="primary", eventId=ev["id"],
+                                                body=body).execute())
+        return "moved"
+    g.with_retry(lambda: svc.events().insert(calendarId="primary", body=body).execute())
+    return "created"
+
+
+def delete_deadline_event(item_id):
+    svc = g.calendar()
+    n = 0
+    for ev in list_studypilot_events(item_id, future_only=False, include_deadlines=True):
+        if _kind(ev) == "deadline":
+            g.with_retry(lambda: svc.events().delete(calendarId="primary", eventId=ev["id"]).execute())
+            n += 1
+    return n
+
+
+# ---------- the student's own calendar (for clash detection) ----------
+def list_student_events(days=7):
+    """Timed events the student created themselves (not StudyPilot's), next `days` days."""
+    svc = g.calendar()
+    now = datetime.now(timezone.utc)
+    items = g.with_retry(lambda: svc.events().list(
+        calendarId="primary", timeMin=now.isoformat(), timeMax=(now + timedelta(days=days)).isoformat(),
+        singleEvents=True, orderBy="startTime", maxResults=250).execute()).get("items", [])
+    out = []
+    for e in items:
+        if _is_ours(e) or "dateTime" not in e.get("start", {}) or e.get("transparency") == "transparent":
+            continue
+        out.append({"id": e["id"], "title": e.get("summary", "(busy)"),
+                    "start": datetime.fromisoformat(e["start"]["dateTime"]).astimezone(TZ),
+                    "end": datetime.fromisoformat(e["end"]["dateTime"]).astimezone(TZ),
+                    "updated": e.get("updated", "")})
+    return out
+
+
+def find_free_slot(minutes, after: datetime, before: datetime, prefer_evening=True):
+    """First free slot of `minutes` inside the study window between after and before."""
+    need = timedelta(minutes=minutes)
+    for s, e in get_free_slots(after, before):
+        start = s
+        if prefer_evening:
+            evening = s.replace(hour=17, minute=0, second=0, microsecond=0)
+            if s < evening and evening + need <= e:
+                start = evening
+        start = start + timedelta(minutes=(30 - start.minute % 30) % 30)
+        start = start.replace(second=0, microsecond=0)
+        if start + need <= e:
+            return start, start + need
+    return None
 
 
 def _is_ours(ev):

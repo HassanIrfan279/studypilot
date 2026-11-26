@@ -4,6 +4,7 @@ import { Check, ExternalLink, RotateCw, Sparkles } from 'lucide-react'
 import { api, fmtDate } from '../api'
 import { useLive } from '../live'
 import CourseTag from '../components/CourseTag'
+import SessionCheck from '../components/SessionCheck'
 
 const time = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 
@@ -11,6 +12,7 @@ export default function Plan() {
   const { tick } = useLive()
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(null)
+  const [checking, setChecking] = useState(null)
 
   const load = () => api.get('/api/plan').then(setData)
   useEffect(() => { load() }, [tick])
@@ -30,6 +32,7 @@ export default function Plan() {
 
   return (
     <div className="space-y-7">
+      {checking && <SessionCheck session={checking} onClose={() => { setChecking(null); load() }} />}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-3xl font-extrabold flex-1">Study plan</h1>
         <button className="btn-primary" disabled={busy === 'all'} onClick={() => act('all', () => api.post('/api/plan/all'))}>
@@ -76,8 +79,7 @@ export default function Plan() {
                 {s.done ? (
                   <span className="text-emerald-700 font-bold flex items-center gap-1.5"><Check size={18} /> Done</span>
                 ) : (
-                  <button className="btn-ghost !py-1.5" disabled={busy === s.event_id}
-                    onClick={() => act(s.event_id, () => api.post(`/api/sessions/${s.event_id}/done`))}>
+                  <button className="btn-ghost !py-1.5" onClick={() => setChecking(s)}>
                     <Check size={17} /> Mark done
                   </button>
                 )}

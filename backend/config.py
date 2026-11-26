@@ -31,6 +31,9 @@ STUDY_WINDOW_END = os.getenv("STUDY_WINDOW_END", "23:00")
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 SYNC_INTERVAL_SECONDS = 10 if DEMO_MODE else int(os.getenv("SYNC_INTERVAL_SECONDS", "30"))
 DB_PATH = str(BASE_DIR / "studypilot.db")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+# Gemini decides what to do on each change (False = fixed rule-based pipeline)
+AGENT_BRAIN = os.getenv("AGENT_BRAIN", "true").lower() == "true"
 
 # ADK / google-genai read the key from this env var
 if GEMINI_API_KEY:
@@ -46,6 +49,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/classroom.announcements.readonly",
     "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file",        # create the StudyPilot folder + notes only
+    "https://www.googleapis.com/auth/gmail.readonly",    # read class emails, never send
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.readonly",
 ]
