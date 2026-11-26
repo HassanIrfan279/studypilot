@@ -1,6 +1,7 @@
 """Tutor tools: lecture analysis, practice quizzes, prep packs, panic mode, readiness, daily brief.
 Every Gemini result is cached in SQLite so the same file is never analyzed twice."""
 import hashlib
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -140,13 +141,30 @@ def lectures_for_assessment(assessment_id, limit=4):
     if not item:
         return []
     attached = db.query("SELECT file_id FROM materials WHERE item_id=?", (assessment_id,))
-    course = db.query("SELECT file_id FROM materials WHERE course_id=? ORDER BY created DESC",
-                      (item["course_id"],))
-    ids = []
-    for r in attached + course:
+    # Course lectures = files NOT attached to some other assignment
+    course = db.query("SELECT file_id, title, created FROM materials WHERE course_id=? AND "
+                      "(item_id IS NULL OR item_id=?) ORDER BY created DESC",
+                      (item["course_id"], assessment_id))
+
+    def words(text):
+        return set(re.findall(r"[a-z]+|\d+", (text or "").lower().replace("_", " "))) - STOP
+
+    want = words(item["title"] + " " + (item["description"] or ""))
+    # Best title match first ("Quiz - Chapter 3" -> "Chapter_3_v9.0.pptx"), then newest
+    course.sort(key=lambda r: -len(want & words(r["title"])))
+    ids = [r["file_id"] for r in attached]
+    best = course[0] if course else None
+    if best and want & words(best["title"]) and len(want & words(best["title"])) >= 2:
+        # a strong match (e.g. same chapter number): focus on it
+        course = [best] + [r for r in course[1:] if len(want & words(r["title"])) >= 2]
+    for r in course:
         if r["file_id"] not in ids:
             ids.append(r["file_id"])
     return ids[:limit]
+
+
+STOP = {"quiz", "the", "a", "of", "and", "in", "on", "for", "to", "v", "pdf", "pptx", "docx",
+        "found", "class", "announcement", "test", "assignment", "lecture", "slides", "recent"}
 
 
 def _analyses(file_ids):

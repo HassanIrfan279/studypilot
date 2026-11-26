@@ -30,26 +30,41 @@ def _analyze(file_id, title):
         log("Tutor", f"Couldn't analyze '{title}': {e}", "warn")
 
 
+def warm_up(max_files=8):
+    """Analyze the lectures behind upcoming deadlines, build prep packs, then book study time.
+    Runs after the first sync, and before a demo (pre-warms the cache)."""
+    upcoming = sorted([i for i in st.upcoming_items(14) if i["due"]], key=lambda i: i["due"])
+    log("Coordinator", f"{len(upcoming)} upcoming deadline(s). Asking Tutor to read their "
+                       "lectures first.")
+    targets = []
+    for it in upcoming:
+        for fid in st.lectures_for_assessment(it["id"], limit=3):
+            if fid not in targets:
+                targets.append(fid)
+    for fid in targets[:max_files]:
+        m = db.one("SELECT title FROM materials WHERE file_id=?", (fid,))
+        _analyze(fid, m["title"] if m else fid)
+    log("Coordinator", "Lectures ready. Asking Planner to book study time, most urgent first.")
+    planner.plan_unplanned()
+    for it in upcoming:
+        try:
+            st.build_prep_pack(it["id"])
+        except Exception as e:
+            log("Tutor", f"Prep pack for '{it['title']}' failed: {e}", "warn")
+    db.cache_delete("brief")
+    log("Coordinator", "✅ All set: lectures analyzed, study plan booked, prep packs ready.",
+        "success")
+    refresh()
+
+
 def handle(result):
     changes, first = result["changes"], result["first_run"]
 
     if first:
-        upcoming = [i for i in st.upcoming_items(14) if i["due"]]
-        log("Coordinator", f"First sync: {result['courses']} courses, {len(upcoming)} upcoming "
-                           f"deadline(s), {result['materials']} files. Plan: Tutor reads the "
-                           "lectures that matter now → Planner books study time.")
+        log("Coordinator", f"First sync: {result['courses']} courses, {result['materials']} files. "
+                           "Plan: Tutor reads the lectures that matter now → Planner books study time.")
         refresh()
-        targets = []
-        for it in sorted(upcoming, key=lambda i: i["due"]):
-            for fid in st.lectures_for_assessment(it["id"], limit=3):
-                if fid not in targets:
-                    targets.append(fid)
-        for fid in targets[:8]:
-            m = db.one("SELECT title FROM materials WHERE file_id=?", (fid,))
-            _analyze(fid, m["title"] if m else fid)
-        planner.plan_unplanned()
-        db.cache_delete("brief")
-        refresh()
+        warm_up()
         return
 
     if not changes:

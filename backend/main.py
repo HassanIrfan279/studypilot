@@ -1,5 +1,6 @@
 """StudyPilot backend: FastAPI routes + WebSockets. Run with:  uvicorn main:app --reload --port 8000"""
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -14,7 +15,7 @@ import auth
 import db
 import scheduler
 from activity_log import log
-from agents import chat_agent, planner_agent, voice_agent
+from agents import chat_agent, coordinator, planner_agent, voice_agent
 from config import FRONTEND_URL, TIMEZONE
 from google_clients import NotLoggedIn
 from tools import calendar_tools as cal
@@ -27,6 +28,8 @@ async def lifespan(app):
     task = asyncio.create_task(scheduler.loop())
     yield
     task.cancel()
+    # Background Google/Gemini calls run in worker threads; don't wait for them on Ctrl-C
+    os._exit(0)
 
 
 app = FastAPI(title="StudyPilot", lifespan=lifespan)
@@ -183,6 +186,13 @@ async def plan():
     return {"sessions": sessions,
             "priorities": [{"id": p["id"], "title": p["title"], "course_name": p["course_name"],
                             "priority": p["priority"], "due": p["due"]} for p in priorities]}
+
+
+@app.post("/api/warmup")
+async def warmup():
+    """Analyze lectures, book the plan and build prep packs (use before a demo)."""
+    asyncio.create_task(run(coordinator.warm_up))
+    return {"started": True}
 
 
 @app.post("/api/plan/all")

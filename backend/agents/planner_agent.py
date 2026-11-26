@@ -21,7 +21,7 @@ def estimate_hours(item):
         hours = 2.0
     if item["kind"] == "assignment":
         hours += 1.0
-    return max(1.5, min(hours, 6.0))
+    return max(1.5, min(hours, 4.5))  # max 3 x 90-min sessions per deadline
 
 
 def split_sessions(hours):
@@ -29,6 +29,12 @@ def split_sessions(hours):
     n = max(1, math.ceil(total_min / 90))
     length = max(45, min(90, round(total_min / n / 15) * 15))
     return n, length
+
+
+def _round_up(dt):
+    """18:28 -> 18:30, 19:58 -> 20:00 (sessions should start at clean times)."""
+    extra = (30 - dt.minute % 30) % 30
+    return (dt + timedelta(minutes=extra)).replace(second=0, microsecond=0)
 
 
 def _pick(slots, n, length, one_per_day=True):
@@ -41,8 +47,9 @@ def _pick(slots, n, length, one_per_day=True):
             continue
         need = timedelta(minutes=length)
         start = max(s, s.replace(hour=PREFERRED_START_HOUR, minute=0, second=0, microsecond=0))
+        start = _round_up(start)
         if start + need > e:
-            start = s  # evening doesn't fit, use the start of the free slot
+            start = _round_up(s)  # evening doesn't fit, use the start of the free slot
         if start + need <= e:
             chosen.append((start, start + need))
             used_days.add(s.date())

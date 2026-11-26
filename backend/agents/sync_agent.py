@@ -67,7 +67,9 @@ def _fetch_course(c):
                           else "assignment",
                           "due": _hidden_due(d), "update_time": recent[0]["update_time"],
                           "link": recent[0]["link"], "files": [], "source": "announcement"})
-        if found:
+        known = {r["id"] for r in db.query("SELECT id FROM items WHERE course_id=? AND "
+                                           "source='announcement'", (c["id"],))}
+        if any(f"ann-{c['id']}-{_slug(d['title'])}" not in known for d in found):
             log("Sync", f"🔎 Gemini found {len(found)} deadline(s) hidden in {c['name']} "
                         f"announcements: {', '.join(d['title'] for d in found)}.")
     return items, materials
