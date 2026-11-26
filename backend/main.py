@@ -18,7 +18,7 @@ from activity_log import log
 import runs
 from agents import chat_agent, coordinator, planner_agent, voice_agent, watcher
 from tools import audit_tools as audit
-from tools import telegram_tools as tg
+from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 from config import FRONTEND_URL, TIMEZONE
 from google_clients import NotLoggedIn
 from tools import calendar_tools as cal
@@ -187,12 +187,12 @@ def agent_runs():
     return runs.recent(15)
 
 
-@app.get("/api/telegram")
+@app.get("/api/notify")
 async def telegram_status():
     return await run(tg.status)
 
 
-@app.post("/api/telegram/test")
+@app.post("/api/notify/test")
 async def telegram_test():
     ok = await run(tg.send, "📘 <b>StudyPilot</b> is connected. I'll message you here when "
                             "your plan changes.")

@@ -21,7 +21,7 @@ from agents import planner_agent as planner
 from config import TIMEZONE
 from tools import calendar_tools as cal
 from tools import study_tools as st
-from tools import telegram_tools as tg
+from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 
 TZ = ZoneInfo(TIMEZONE)
 MAX_STEPS = 14
@@ -191,7 +191,7 @@ def notify_student(message: str) -> dict:
     to their phone on Telegram. Call this ONCE at the end of a run. Max 2 short sentences."""
     announce(message)
     sent = tg.send(f"📘 <b>StudyPilot</b>\n{message}")
-    _say("say", message + ("  (sent to Telegram)" if sent else ""))
+    _say("say", message + ("  (sent to your phone)" if sent else ""))
     return {"shown": True, "telegram": sent}
 
 

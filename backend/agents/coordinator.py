@@ -11,7 +11,7 @@ from config import AGENT_BRAIN, TIMEZONE
 from tools import audit_tools as audit
 from tools import calendar_tools as cal
 from tools import study_tools as st
-from tools import telegram_tools as tg
+from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 
 
 def _when(iso):
