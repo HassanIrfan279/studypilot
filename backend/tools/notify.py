@@ -6,7 +6,7 @@ import re
 
 import requests
 
-from config import (CALLMEBOT_APIKEY, CALLMEBOT_PHONE, NTFY_TOPIC, TWILIO_ACCOUNT_SID,
+from config import (CALLMEBOT_APIKEY, CALLMEBOT_PHONE, DISCORD_WEBHOOK_URL, NTFY_TOPIC, TWILIO_ACCOUNT_SID,
                     TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, WA_PHONE_NUMBER_ID, WA_TO, WA_TOKEN,
                     WHATSAPP_TO)
 from tools import telegram_tools as tg
@@ -100,9 +100,28 @@ def send_ntfy(text: str) -> bool:
         return False
 
 
+def discord_enabled():
+    return bool(DISCORD_WEBHOOK_URL)
+
+
+def send_discord(text: str) -> bool:
+    """Post to the student's private Discord channel (phone notification via the Discord app)."""
+    if not discord_enabled():
+        return False
+    try:
+        md = re.sub(r"</?b>", "**", text)
+        r = requests.post(DISCORD_WEBHOOK_URL, json={"content": md[:1900], "username": "StudyPilot"},
+                          timeout=10)
+        return r.ok
+    except Exception as e:
+        print("Discord error:", e)
+        return False
+
+
 def send(text: str) -> bool:
     """Send to every configured channel. True if at least one delivered."""
-    ok = send_meta_whatsapp(text)
+    ok = send_discord(text)
+    ok = send_meta_whatsapp(text) or ok
     ok = send_ntfy(text) or ok
     ok = send_callmebot(text) or ok
     ok = send_whatsapp(text) or ok
@@ -112,5 +131,6 @@ def send(text: str) -> bool:
 
 
 def status():
-    return {"whatsapp": meta_enabled() or callmebot_enabled() or whatsapp_enabled(),
+    return {"discord": discord_enabled(),
+            "whatsapp": meta_enabled() or callmebot_enabled() or whatsapp_enabled(),
             "push": ntfy_enabled(), "telegram": tg.enabled()}

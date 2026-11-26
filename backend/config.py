@@ -32,7 +32,9 @@ DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 SYNC_INTERVAL_SECONDS = 10 if DEMO_MODE else int(os.getenv("SYNC_INTERVAL_SECONDS", "30"))
 DB_PATH = str(BASE_DIR / "studypilot.db")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-# WhatsApp alerts via Meta's official WhatsApp Cloud API (free test number)
+# Phone alerts via a private Discord channel webhook (works where Telegram/WhatsApp APIs don't)
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+# WhatsApp alerts via Meta's official WhatsApp Cloud API (needs a verified business)
 WA_TOKEN = os.getenv("WA_TOKEN", "")
 WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "")
 WA_TO = os.getenv("WA_TO", "")  # the student's WhatsApp number, e.g. +923001234567
