@@ -44,17 +44,28 @@ except Exception as e:  # pragma: no cover
 
 async def chat(message: str, session_id: str = "default") -> str:
     if ADK_OK:
-        content = types.Content(role="user", parts=[types.Part(text=message)])
-        reply = ""
-        async for event in runner.run_async(user_id=USER, session_id=session_id,
-                                            new_message=content):
-            if event.content and event.content.parts and event.is_final_response():
-                reply = "".join(p.text or "" for p in event.content.parts)
-        return reply or "Done."
-    # Fallback: google-genai automatic function calling
+        try:
+            content = types.Content(role="user", parts=[types.Part(text=message)])
+            reply = ""
+            async for event in runner.run_async(user_id=USER, session_id=session_id,
+                                                new_message=content):
+                if event.content and event.content.parts and event.is_final_response():
+                    reply = "".join(p.text or "" for p in event.content.parts)
+            return reply or "Done."
+        except Exception as e:
+            log("Coordinator", f"Main agent model busy ({type(e).__name__}) — switching to backup "
+                               "model.", "warn")
+    # Fallback: google-genai automatic function calling, trying each backup model
     import asyncio
     from gemini import client
+    from config import MODEL_CHAIN
     cfg = types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, tools=TOOLS)
-    resp = await asyncio.to_thread(client.models.generate_content, model=GEMINI_MODEL,
-                                   contents=message, config=cfg)
-    return resp.text or "Done."
+    last = None
+    for model in MODEL_CHAIN[1:] or MODEL_CHAIN:
+        try:
+            resp = await asyncio.to_thread(client.models.generate_content, model=model,
+                                           contents=message, config=cfg)
+            return resp.text or "Done."
+        except Exception as e:
+            last = e
+    return f"Sorry, Gemini is overloaded right now ({last}). Try again in a moment."

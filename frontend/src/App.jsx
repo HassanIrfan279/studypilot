@@ -22,6 +22,12 @@ function Login() {
           Your AI study agent. It reads your Google Classroom, understands every lecture and
           plans your study time in Google Calendar — so you're never unprepared.
         </p>
+        {new URLSearchParams(window.location.search).get('missing_scopes') && (
+          <div className="mt-6 p-4 rounded-xl bg-amber-50 border-2 border-amber-400 text-left text-amber-900">
+            <b>⚠ Almost there!</b> Google didn't give StudyPilot access to Classroom, Drive and Calendar.
+            Sign in again and <b>tick every checkbox</b> (or click “Select all”) on the permissions screen.
+          </div>
+        )}
         <a href={loginUrl} className="btn-primary text-lg mt-8 px-6 py-3">
           Sign in with Google
         </a>

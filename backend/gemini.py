@@ -6,9 +6,11 @@ import time
 from google import genai
 from google.genai import types
 
-from config import GEMINI_API_KEY, GEMINI_MODEL
+from config import GEMINI_API_KEY, MODEL_CHAIN
 
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+# 90s timeout per call so a stuck request can never freeze the demo
+client = (genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=60_000))
+          if GEMINI_API_KEY else None)
 
 # Only 2 Gemini calls at a time -> stays inside free-tier rate limits
 _queue = threading.Semaphore(2)
@@ -18,21 +20,29 @@ class GeminiError(Exception):
     pass
 
 
+def _busy(e):
+    msg = str(e)
+    return any(s in msg for s in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "overloaded",
+                                  "504", "DEADLINE", "timed out", "Timeout", "404"))
+
+
 def _call(contents, config):
+    """Try the main model; if Google says it's busy, fall back to the next model in the list."""
     if not client:
         raise GeminiError("GEMINI_API_KEY is missing in backend/.env")
     last = None
-    for attempt in range(3):
-        try:
-            with _queue:
-                return client.models.generate_content(model=GEMINI_MODEL, contents=contents,
-                                                      config=config)
-        except Exception as e:
-            last = e
-            msg = str(e)
-            wait = 2 ** attempt * (8 if "429" in msg or "RESOURCE_EXHAUSTED" in msg else 1)
-            time.sleep(wait)
-    raise GeminiError(f"Gemini failed after 3 tries: {last}")
+    for model in MODEL_CHAIN:
+        for attempt in range(2):
+            try:
+                with _queue:
+                    return client.models.generate_content(model=model, contents=contents,
+                                                          config=config)
+            except Exception as e:
+                last = e
+                if _busy(e):
+                    break  # this model is overloaded -> try the next one right away
+                time.sleep(2 ** attempt)
+    raise GeminiError(f"Gemini failed on all models: {last}")
 
 
 def file_part(data: bytes, mime: str):

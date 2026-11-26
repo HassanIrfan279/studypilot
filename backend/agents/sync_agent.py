@@ -14,7 +14,7 @@ def _hidden_due(d):
     if not d["due_date"] or d["ambiguous"]:
         return None
     try:
-        t = d["due_time"] or "23:59"
+        t = (d["due_time"] or "23:59")[:5]
         local = datetime.fromisoformat(f"{d['due_date']}T{t}").replace(tzinfo=ZoneInfo(TIMEZONE))
         return local.astimezone(ZoneInfo("UTC")).isoformat()
     except ValueError:
@@ -47,7 +47,9 @@ def fetch_all():
                 found = []
             for i, d in enumerate(found):
                 items.append({"id": f"ann-{a['id']}-{i}", "course_id": c["id"], "title": d["title"],
-                              "description": a["text"][:500], "kind": d["kind"] or "assignment",
+                              "description": a["text"][:500],
+                              "kind": "quiz" if cr.QUIZ_WORDS.search(f"{d['kind']} {d['title']}")
+                              else "assignment",
                               "due": _hidden_due(d), "update_time": a["update_time"],
                               "link": a["link"], "files": [], "source": "announcement"})
     return courses, items, materials

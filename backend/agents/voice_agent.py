@@ -5,6 +5,7 @@ Browser -> server: binary = 16-bit PCM mono 16 kHz audio; text = JSON {"type": "
 Server -> browser: binary = 16-bit PCM mono 24 kHz audio; text = JSON events (transcripts, turn state)
 """
 import asyncio
+import contextlib
 import json
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -12,7 +13,7 @@ from google.genai import types
 
 from activity_log import log
 from agents.assistant_tools import ALL_TOOLS, SYSTEM_INSTRUCTION, TOOLS_BY_NAME
-from config import GEMINI_LIVE_MODEL
+from config import LIVE_MODEL_CHAIN
 from gemini import client
 
 
@@ -41,6 +42,30 @@ async def _run_tool(fc):
         return {"error": str(e)}
 
 
+@contextlib.asynccontextmanager
+async def _connect():
+    """Open a Live session, falling back to the next model if one is busy or slow."""
+    last = None
+    for model in LIVE_MODEL_CHAIN:
+        cm = client.aio.live.connect(model=model, config=_live_config())
+        try:
+            session = await asyncio.wait_for(cm.__aenter__(), timeout=15)
+        except Exception as e:
+            last = e
+            log("Voice", f"Voice model {model} unavailable — trying backup.", "warn")
+            continue
+        log("Voice", f"🎙 Voice session started ({model}).")
+        try:
+            yield session
+        finally:
+            try:
+                await cm.__aexit__(None, None, None)
+            except Exception:
+                pass
+        return
+    raise RuntimeError(f"All voice models unavailable: {last}")
+
+
 async def voice_session(ws: WebSocket):
     await ws.accept()
     if client is None:
@@ -48,8 +73,7 @@ async def voice_session(ws: WebSocket):
         await ws.close()
         return
     try:
-        async with client.aio.live.connect(model=GEMINI_LIVE_MODEL, config=_live_config()) as session:
-            log("Voice", "🎙 Voice session started.")
+        async with _connect() as session:
             await ws.send_text(json.dumps({"type": "ready"}))
 
             async def browser_to_gemini():

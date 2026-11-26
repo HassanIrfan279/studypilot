@@ -11,8 +11,16 @@ os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
-GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL") or "gemini-2.5-flash-native-audio-preview-12-2025"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-3-flash-preview"
+# If the main model is overloaded (503/429) we automatically try these, in order
+FALLBACK_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_FALLBACK_MODELS", "gemini-3.5-flash-lite,gemini-flash-lite-latest").split(",")
+    if m.strip()]
+MODEL_CHAIN = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
+GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL") or "gemini-3.8-live"
+LIVE_MODEL_CHAIN = [GEMINI_LIVE_MODEL] + [m.strip() for m in os.getenv(
+    "GEMINI_LIVE_FALLBACKS", "gemini-3.1-flash-live-preview").split(",")
+    if m.strip() and m.strip() != GEMINI_LIVE_MODEL]
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 CLIENT_SECRETS = str(BASE_DIR / os.getenv("GOOGLE_CLIENT_SECRETS", "credentials.json"))
 OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:8000/auth/callback")
@@ -26,7 +34,7 @@ DB_PATH = str(BASE_DIR / "studypilot.db")
 
 # ADK / google-genai read the key from this env var
 if GEMINI_API_KEY:
-    os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
+    os.environ["GEMINI_API_KEY"] = GEMINI_API_KEY
     os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "FALSE")
 
 SCOPES = [

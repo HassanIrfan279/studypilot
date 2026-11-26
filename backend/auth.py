@@ -27,8 +27,15 @@ def login_url() -> str:
 def handle_callback(full_url: str, state: str):
     flow = _flow(state)
     flow.code_verifier = _pending.pop(state, None)
-    flow.fetch_token(authorization_response=full_url)
+    token = flow.fetch_token(authorization_response=full_url)
+    granted = token.get("scope", [])
+    if isinstance(granted, str):
+        granted = granted.split()
+    missing = [s for s in SCOPES if s.startswith("https://www.googleapis.com/auth/")
+               and "userinfo" not in s and s not in granted]
     _save(flow.credentials)
+    db.kv_set("missing_scopes", [m.split("/")[-1] for m in missing])
+    return missing
 
 
 def _save(creds: Credentials):
