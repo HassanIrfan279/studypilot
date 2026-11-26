@@ -29,10 +29,10 @@ export default function SessionCheck({ session, onClose }) {
           <button onClick={onClose} aria-label="Close" className="p-1 text-slate-500 hover:text-slate-900"><X size={24} /></button>
         </div>
         {error && <p className="text-red-800">{error}</p>}
-        {!quiz && !error && <p className="flex items-center gap-2 text-lg"><Loader2 className="animate-spin" /> Writing your check questions…</p>}
+        {!quiz && !error && <p className="flex items-center gap-2 text-base"><Loader2 className="animate-spin" /> Writing your check questions…</p>}
         {quiz && <Quiz questions={quiz.questions} onFinish={finish} title={session.title.replace(/^📘\s*/, '')} />}
         {result && (
-          <div className={`mt-5 rounded-2xl p-5 text-lg font-semibold ${result.passed ? 'bg-emerald-100 text-emerald-950' : 'bg-red-100 text-red-950'}`}>
+          <div className={`mt-5 rounded-2xl p-5 text-base font-semibold ${result.passed ? 'bg-emerald-100 text-emerald-950' : 'bg-red-100 text-red-950'}`}>
             {result.message}
             <div className="mt-3"><button className="btn-primary" onClick={onClose}>{result.passed ? 'Back to my plan' : 'OK, I’ll review'}</button></div>
           </div>

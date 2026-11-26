@@ -35,7 +35,7 @@ export default function Dashboard() {
       )}
 
       <div className="flex items-baseline gap-4 flex-wrap">
-        <h1 className="text-3xl font-extrabold">Upcoming deadlines</h1>
+        <h1 className="text-2xl font-extrabold">Upcoming deadlines</h1>
         <span className="text-slate-600">Most urgent first{data?.last_sync && ` · synced ${fmtDate(data.last_sync)}`}</span>
       </div>
 
@@ -44,9 +44,9 @@ export default function Dashboard() {
           <AlertTriangle size={22} /> {error}. Showing the last data I had.
         </div>
       )}
-      {!data && !error && <p className="text-lg text-slate-600">Loading deadlines…</p>}
+      {!data && !error && <p className="text-base text-slate-600">Loading deadlines…</p>}
       {data && data.items.length === 0 && (
-        <div className="card text-lg text-slate-700">No deadlines yet. The agent is syncing your Classroom; watch the activity feed.</div>
+        <div className="card text-base text-slate-700">No deadlines yet. The agent is syncing your Classroom; watch the activity feed.</div>
       )}
       <div className="space-y-4">
         {data?.items.map((it) => <DeadlineCard key={it.id} item={it} onChange={load} />)}

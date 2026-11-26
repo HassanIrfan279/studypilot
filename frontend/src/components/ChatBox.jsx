@@ -36,7 +36,7 @@ export default function ChatBox() {
   const all = [...msgs, ...voiceLines.map((v) => ({ ...v, voice: true }))]
   return (
     <div className="card !p-0 overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-slate-200 font-bold text-lg flex items-center gap-2.5">
+      <div className="px-5 py-3.5 border-b border-slate-200 font-bold text-base flex items-center gap-2.5">
         <MessageSquareText size={20} className="text-brand" /> Ask StudyPilot
       </div>
       <div ref={box} className="h-[300px] overflow-y-auto p-4 space-y-3">

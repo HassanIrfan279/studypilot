@@ -20,7 +20,7 @@ export default function DeadlineCard({ item, onChange }) {
     <article className="card flex gap-6 items-center">
       <div className="flex-1 min-w-0">
         <h3 className="text-2xl font-bold leading-tight">{item.title}</h3>
-        <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap mt-2 text-[16px]">
+        <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap mt-2 text-base">
           <CourseTag name={item.course_name} color={item.color} />
           <span className={`text-xs font-bold uppercase tracking-wide px-2 py-1 rounded-md ${item.kind === 'quiz' ? 'bg-fuchsia-100 text-fuchsia-900' : 'bg-slate-100 text-slate-700'}`}>
             {item.kind}

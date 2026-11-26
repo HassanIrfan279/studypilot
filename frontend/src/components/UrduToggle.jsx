@@ -17,7 +17,7 @@ export default function UrduText({ text, className = '' }) {
 
   return (
     <div className={className}>
-      {show && urdu ? <p className="urdu text-lg">{urdu}</p> : <p>{text}</p>}
+      {show && urdu ? <p className="urdu text-base">{urdu}</p> : <p>{text}</p>}
       <button onClick={toggle} className="text-sm font-semibold text-indigo-700 hover:underline mt-1">
         {loading ? 'ترجمہ ہو رہا ہے…' : show ? 'Show English' : 'اردو میں سمجھائیں (Urdu)'}
       </button>

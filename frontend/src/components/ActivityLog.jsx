@@ -39,7 +39,7 @@ export default function ActivityLog() {
           <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
           <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-emerald-500" />
         </span>
-        <h2 className="font-bold text-lg">Agent</h2>
+        <h2 className="font-bold text-base">Agent</h2>
         <div className="ml-auto flex gap-1">
           <button className={tabCls('runs')} onClick={() => setTab('runs')}>
             Decisions{running && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />}
@@ -63,7 +63,7 @@ export default function ActivityLog() {
                   <span className="font-bold text-slate-800">{l.agent}</span>
                   <span className="text-slate-500 tabular">{new Date(l.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                 </div>
-                <p className={`text-[15px] leading-snug ${l.level === 'error' ? 'text-red-900' : 'text-slate-900'}`}>
+                <p className={`text-sm leading-snug ${l.level === 'error' ? 'text-red-900' : 'text-slate-900'}`}>
                   {l.message.replace(/^[🔊🛠📅🔎✅✔💬🎙🚨]\s*/u, '')}
                 </p>
               </div>

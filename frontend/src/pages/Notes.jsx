@@ -72,7 +72,7 @@ export default function Notes() {
   })
 
   if (error && !data) return <div className="card !bg-red-50 text-red-900 flex gap-3 items-center"><AlertTriangle size={22} /> {error}</div>
-  if (!data) return <div className="card text-lg flex items-center gap-3"><Loader2 size={24} className="animate-spin text-brand" /> Loading notes…</div>
+  if (!data) return <div className="card text-base flex items-center gap-3"><Loader2 size={24} className="animate-spin text-brand" /> Loading notes…</div>
 
   const item = data.item
   return (
@@ -80,7 +80,7 @@ export default function Notes() {
       <div className="card flex items-start gap-5 flex-wrap">
         <div className="flex-1 min-w-[20rem]">
           <Link to={`/prep/${id}`} className="text-brand font-semibold inline-flex items-center gap-1 mb-1"><ArrowLeft size={17} /> Prep pack</Link>
-          <h1 className="text-3xl font-extrabold flex items-center gap-3"><NotebookPen size={30} className="text-brand" /> {item?.title} <span className="text-slate-400">notes</span></h1>
+          <h1 className="text-2xl font-extrabold flex items-center gap-3"><NotebookPen size={30} className="text-brand" /> {item?.title} <span className="text-slate-400">notes</span></h1>
           <div className="flex items-center gap-3 flex-wrap mt-2">
             <CourseTag name={data.course_name} color={data.color} />
             {notes && (
@@ -113,7 +113,7 @@ export default function Notes() {
           <NotebookPen size={44} className="mx-auto text-brand mb-3" />
           <h2 className="text-2xl font-bold">No notes yet for this deadline</h2>
           <p className="text-slate-600 mt-1 mb-5">I'll read the actual lecture files and write step-by-step notes: big idea, intuition, worked example, common mistakes, quick check.</p>
-          <button className="btn-primary !text-lg" onClick={() => generate(false)} disabled={!!busy}>
+          <button className="btn-primary !text-base" onClick={() => generate(false)} disabled={!!busy}>
             {busy === 'generate' ? <><Loader2 size={20} className="animate-spin" /> Reading lectures and writing… (~30s)</> : <><Sparkles size={20} /> Write my notes</>}
           </button>
         </div>
@@ -137,7 +137,7 @@ export default function Notes() {
                   <input value={instruction} onChange={(e) => setInstruction(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && instruction.trim() && aiEdit(instruction)}
                     placeholder="e.g. explain Dijkstra with a smaller graph" disabled={!!busy}
-                    className="flex-1 border border-indigo-300 rounded-xl px-4 py-2.5 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    className="flex-1 border border-indigo-300 rounded-xl px-3.5 py-2 text-base bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   <button className="btn-primary" disabled={!!busy || !instruction.trim()} onClick={() => aiEdit(instruction)}>
                     {busy === 'ai' ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} Apply
                   </button>
@@ -153,7 +153,7 @@ export default function Notes() {
               <div className="card">
                 <p className="text-slate-600 mb-2">Edit freely. <b>## Heading</b>, <b>**bold**</b>, <b>- bullet</b>. Your edits sync to the Google Doc.</p>
                 <textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck
-                  className="w-full min-h-[70vh] font-mono text-[15px] leading-relaxed border border-slate-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  className="w-full min-h-[70vh] font-mono text-sm leading-relaxed border border-slate-300 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
             ) : (
               <article className={`card notes-print ${busy === 'ai' || busy === 'generate' ? 'opacity-50' : ''}`}>

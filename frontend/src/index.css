@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-urdu: "Noto Nastaliq Urdu", serif;
   --color-brand: #3730a3;
   --color-brand-light: #e0e7ff;
@@ -9,8 +9,11 @@
   --color-muted: #475569;
 }
 
-/* Projector-first: larger base size, strong ink on a near-white page */
-html { font-size: 18px; }
+/* 16px base (readable on a projector without oversized text), strong ink on a near-white page */
+html { font-size: 16px; }
+body { line-height: 1.55; }
+button:not(:disabled), a, [role="button"], select, summary { cursor: pointer; }
+input::placeholder, textarea::placeholder { color: #64748b; font-size: .95em; }
 body {
   background: #f1f5f9;
   color: var(--color-ink);
@@ -29,7 +32,7 @@ p { text-wrap: pretty; }
 .card { @apply bg-white rounded-2xl border border-slate-200 p-6; box-shadow: 0 1px 2px rgb(15 23 42 / .04), 0 4px 12px -4px rgb(15 23 42 / .06); }
 
 .btn-primary, .btn-ghost, .btn-danger, .btn-on-dark {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 font-semibold transition cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-[15px] font-semibold transition-colors duration-150 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed;
 }
 .btn-primary { @apply bg-brand text-white hover:bg-indigo-800 active:bg-indigo-900; }
 .btn-ghost { @apply bg-slate-100 text-slate-800 hover:bg-slate-200 active:bg-slate-300; }
@@ -38,7 +41,7 @@ p { text-wrap: pretty; }
 
 /* FullCalendar, themed to StudyPilot */
 .sp-calendar { --fc-border-color: #e2e8f0; --fc-today-bg-color: #eef2ff; --fc-now-indicator-color: #dc2626; --fc-button-bg-color: #3730a3; --fc-button-border-color: #3730a3; --fc-button-hover-bg-color: #312e81; --fc-button-active-bg-color: #1e1b4b; --fc-event-border-color: transparent; }
-.sp-calendar .fc-toolbar-title { font-size: 1.35rem; font-weight: 800; }
+.sp-calendar .fc-toolbar-title { font-size: 1.2rem; font-weight: 800; }
 .sp-calendar .fc-button { border-radius: 10px; font-weight: 600; text-transform: capitalize; }
 .sp-calendar .fc-event { border-radius: 8px; border-width: 2px; font-size: 13px; font-weight: 600; padding: 1px 3px; cursor: pointer; }
 .sp-calendar .ev-deadline { font-weight: 800; }
@@ -58,10 +61,10 @@ p { text-wrap: pretty; }
 }
 
 /* ---------- study notes ---------- */
-.notes-body { font-size: 18px; line-height: 1.7; color: #0f172a; max-width: 78ch; }
-.notes-body h1 { font-size: 2rem; font-weight: 800; margin: 0 0 .75rem; color: #312e81; }
-.notes-body h2 { font-size: 1.5rem; font-weight: 800; margin: 2rem 0 .75rem; padding-bottom: .35rem; border-bottom: 2px solid #e2e8f0; scroll-margin-top: 1rem; }
-.notes-body h3 { font-size: 1.2rem; font-weight: 700; margin: 1.25rem 0 .5rem; }
+.notes-body { font-size: 16px; line-height: 1.7; color: #0f172a; max-width: 78ch; }
+.notes-body h1 { font-size: 1.75rem; font-weight: 800; margin: 0 0 .75rem; color: #312e81; }
+.notes-body h2 { font-size: 1.3rem; font-weight: 800; margin: 2rem 0 .75rem; padding-bottom: .35rem; border-bottom: 2px solid #e2e8f0; scroll-margin-top: 1rem; }
+.notes-body h3 { font-size: 1.1rem; font-weight: 700; margin: 1.25rem 0 .5rem; }
 .notes-body p { margin: .6rem 0; }
 .notes-body ul, .notes-body ol { margin: .5rem 0 .75rem 1.5rem; }
 .notes-body ul { list-style: disc; }

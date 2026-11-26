@@ -35,8 +35,8 @@ function Login() {
         <span className="grid place-items-center w-14 h-14 rounded-2xl bg-brand text-white mb-6">
           <BookOpenCheck size={30} strokeWidth={2.2} />
         </span>
-        <h1 className="text-4xl font-extrabold text-slate-900">StudyPilot</h1>
-        <p className="mt-3 text-lg text-slate-600 leading-relaxed">
+        <h1 className="text-3xl font-extrabold text-slate-900">StudyPilot</h1>
+        <p className="mt-3 text-base text-slate-600 leading-relaxed">
           Your AI study agent. It reads your Google Classroom, understands every lecture and
           plans your study time in Google Calendar, so you're never unprepared.
         </p>
@@ -46,7 +46,7 @@ function Login() {
             Calendar. Sign in again and <b>tick every checkbox</b> (or “Select all”) on the permissions screen.
           </div>
         )}
-        <a href={loginUrl} className="btn-primary w-full text-lg mt-8 py-3">Sign in with Google</a>
+        <a href={loginUrl} className="btn-primary w-full text-base mt-8 py-3">Sign in with Google</a>
         <p className="mt-4 text-sm text-slate-500 flex gap-2 items-start">
           <ShieldCheck size={18} className="shrink-0 mt-0.5" />
           Read-only access to Classroom. Only StudyPilot's own Calendar events are ever changed.

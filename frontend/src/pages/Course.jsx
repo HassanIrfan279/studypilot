@@ -12,11 +12,11 @@ export default function Course() {
   const { tick } = useLive()
   const [data, setData] = useState(null)
   useEffect(() => { api.get(`/api/courses/${id}`).then(setData) }, [id, tick])
-  if (!data) return <p className="text-lg text-slate-600">Loading course…</p>
+  if (!data) return <p className="text-base text-slate-600">Loading course…</p>
 
   return (
     <div className="space-y-7">
-      <h1 className="text-4xl font-extrabold">{titleCase(data.course?.name)}</h1>
+      <h1 className="text-3xl font-extrabold">{titleCase(data.course?.name)}</h1>
       <section>
         <h2 className="text-2xl font-bold mb-3 flex items-center gap-2"><FileText size={22} className="text-brand" /> Lectures</h2>
         <div className="grid md:grid-cols-2 gap-3">

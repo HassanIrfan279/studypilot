@@ -22,7 +22,7 @@ export default function Plan() {
     try { await fn(); await load() } finally { setBusy(null) }
   }
 
-  if (!data) return <p className="text-lg text-slate-600">Loading your plan…</p>
+  if (!data) return <p className="text-base text-slate-600">Loading your plan…</p>
 
   const byDay = {}
   data.sessions.filter((s) => !s.past || s.done).forEach((s) => {
@@ -34,7 +34,7 @@ export default function Plan() {
     <div className="space-y-7">
       {checking && <SessionCheck session={checking} onClose={() => { setChecking(null); load() }} />}
       <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-3xl font-extrabold flex-1">Study plan</h1>
+        <h1 className="text-2xl font-extrabold flex-1">Study plan</h1>
         <button className="btn-primary" disabled={busy === 'all'} onClick={() => act('all', () => api.post('/api/plan/all'))}>
           <Sparkles size={18} /> {busy === 'all' ? 'Planning…' : 'Plan everything'}
         </button>
@@ -51,8 +51,8 @@ export default function Plan() {
             <li key={p.id} className="flex items-center gap-4 py-3">
               <span className="w-9 h-9 rounded-full bg-brand text-white font-bold grid place-items-center tabular shrink-0">{i + 1}</span>
               <Link to={`/prep/${p.id}`} className="flex-1 min-w-0 group">
-                <span className="block font-semibold text-lg group-hover:underline underline-offset-4">{p.title}</span>
-                <CourseTag name={p.course_name} color={p.color} className="text-[15px] !font-medium !text-slate-600" />
+                <span className="block font-semibold text-base group-hover:underline underline-offset-4">{p.title}</span>
+                <CourseTag name={p.course_name} color={p.color} className="text-sm !font-medium !text-slate-600" />
               </Link>
               <span className="text-slate-600 tabular hidden md:block">due {fmtDate(p.due)}</span>
               <button className="btn-ghost !py-1.5 text-sm" disabled={busy === p.id}
@@ -72,7 +72,7 @@ export default function Plan() {
             {sessions.map((s) => (
               <div key={s.event_id} className={`flex items-center gap-4 px-5 py-3.5 ${s.done ? 'opacity-55' : ''}`}>
                 <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: s.color }} />
-                <span className="font-bold text-lg tabular w-36 shrink-0">{time(s.start)}–{time(s.end)}</span>
+                <span className="font-bold text-base tabular w-36 shrink-0">{time(s.start)}–{time(s.end)}</span>
                 <Link to={`/prep/${s.assessment_id}`} className="flex-1 min-w-0 font-medium hover:underline underline-offset-4">
                   {s.title.replace(/^📘\s*/, '')}
                 </Link>

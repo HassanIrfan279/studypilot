@@ -25,7 +25,7 @@ export default function Quiz({ questions = [], onFinish, onNewQuestions, title =
       <h3 className="text-2xl font-extrabold">{title}</h3>
       {questions.map((q, i) => (
         <div key={i} className="card">
-          <p className="font-bold text-lg mb-3">{i + 1}. {q.question}</p>
+          <p className="font-bold text-base mb-3">{i + 1}. {q.question}</p>
           <div className="grid gap-2">
             {q.options.map((opt, j) => {
               const picked = answers[i] === j
@@ -48,14 +48,14 @@ export default function Quiz({ questions = [], onFinish, onNewQuestions, title =
         </div>
       ))}
       {!submitted ? (
-        <button className="btn-primary text-lg" onClick={submit}
+        <button className="btn-primary text-base" onClick={submit}
           disabled={Object.keys(answers).length < questions.length}>
           Submit answers ({Object.keys(answers).length}/{questions.length})
         </button>
       ) : (
         <div className={`card flex items-center gap-4 flex-wrap ${correct / questions.length >= 0.6 ? '!bg-emerald-50 !border-emerald-300' : '!bg-red-50 !border-red-300'}`}>
-          <span className="text-3xl font-extrabold tabular">{correct}/{questions.length}</span>
-          <span className="text-lg flex-1 min-w-[14rem]">
+          <span className="text-2xl font-extrabold tabular">{correct}/{questions.length}</span>
+          <span className="text-base flex-1 min-w-[14rem]">
             {correct / questions.length >= 0.6
               ? 'Score saved. Your readiness is updated.'
               : 'Not good enough yet. The agent is booking extra time on what you missed.'}

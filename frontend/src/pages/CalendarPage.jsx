@@ -68,7 +68,7 @@ export default function CalendarPage() {
     <div className="space-y-5">
       <div className="flex items-end gap-x-8 gap-y-3 flex-wrap">
         <div className="flex-1 min-w-[22rem]">
-          <h1 className="text-3xl font-extrabold">Calendar</h1>
+          <h1 className="text-2xl font-extrabold">Calendar</h1>
           <p className="text-slate-600">Synced both ways with Google Calendar. Drag to move, drag on empty time to add. The agent replans around anything you add.</p>
         </div>
         <ul className="flex gap-4 flex-wrap text-sm font-semibold text-slate-700">
@@ -112,7 +112,7 @@ export default function CalendarPage() {
             <input autoFocus value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && create()}
               placeholder="e.g. Cricket match, Family dinner, Gym"
-              className="w-full mt-4 border border-slate-300 rounded-xl px-4 py-2.5 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="w-full mt-4 border border-slate-300 rounded-xl px-3.5 py-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <div className="flex gap-2 justify-end mt-5">
               <button className="btn-ghost" onClick={() => setDraft(null)}>Cancel</button>
               <button className="btn-primary" onClick={create} disabled={busy || !draft.title.trim()}>{busy ? 'Adding…' : 'Add event'}</button>

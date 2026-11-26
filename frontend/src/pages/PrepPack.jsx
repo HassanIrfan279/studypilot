@@ -30,7 +30,7 @@ export default function PrepPack() {
 
   if (error) return <div className="card !bg-red-50 text-red-900 flex gap-3 items-center"><AlertTriangle size={22} /> {error}</div>
   if (!pack) return (
-    <div className="card text-lg flex items-center gap-3">
+    <div className="card text-base flex items-center gap-3">
       <Loader2 size={24} className="animate-spin text-brand" /> Building your prep pack: reading lectures, writing questions, finding videos…
     </div>
   )
@@ -40,8 +40,8 @@ export default function PrepPack() {
     <div className="space-y-6">
       <div className="card flex items-center gap-6">
         <div className="flex-1">
-          <h1 className="text-4xl font-extrabold">{a.title} <span className="text-slate-400 font-bold">prep pack</span></h1>
-          <div className="flex items-center gap-4 flex-wrap mt-2 text-lg">
+          <h1 className="text-3xl font-extrabold">{a.title} <span className="text-slate-400 font-bold">prep pack</span></h1>
+          <div className="flex items-center gap-4 flex-wrap mt-2 text-base">
             <CourseTag name={pack.course_name} color={pack.color} />
             <span className="text-slate-700 tabular">Due {fmtDate(a.due)}</span>
           </div>
@@ -65,9 +65,9 @@ export default function PrepPack() {
             <h2 className="text-2xl font-bold flex-1">{l.title}</h2>
             <Link to={`/lecture/${l.file_id}`} className="btn-ghost !py-1.5">Full breakdown <ArrowRight size={17} /></Link>
           </div>
-          <p className="text-lg leading-relaxed mb-4 max-w-[75ch] text-slate-800">{l.summary}</p>
+          <p className="text-base leading-relaxed mb-4 max-w-[75ch] text-slate-800">{l.summary}</p>
           <h3 className="font-bold text-amber-900 flex items-center gap-2 mb-1"><Target size={18} /> Likely exam points</h3>
-          <ul className="list-disc pl-6 space-y-1 text-[17px]">{l.likely_exam_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
+          <ul className="list-disc pl-6 space-y-1 text-base">{l.likely_exam_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
         </section>
       ))}
 

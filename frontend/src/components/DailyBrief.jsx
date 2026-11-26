@@ -52,18 +52,18 @@ export default function DailyBrief({ tick }) {
           </button>
         </div>
       </div>
-      {!brief && <p className="text-lg text-indigo-200">{loading ? 'Gemini is writing your brief…' : 'Sync to get your brief.'}</p>}
+      {!brief && <p className="text-base text-indigo-200">{loading ? 'Gemini is writing your brief…' : 'Sync to get your brief.'}</p>}
       {brief && sections && (
         <div className="grid md:grid-cols-3 gap-5">
           {sections.map((s) => (
             <div key={s.head}>
               <h3 className="text-sm font-bold uppercase tracking-wide text-amber-200 mb-1.5">{s.head}</h3>
-              {s.lines.map((l, i) => <p key={i} className="text-[17px] leading-relaxed text-white">{l}</p>)}
+              {s.lines.map((l, i) => <p key={i} className="text-base leading-relaxed text-white">{l}</p>)}
             </div>
           ))}
         </div>
       )}
-      {brief && !sections && <p className="whitespace-pre-wrap text-lg leading-relaxed">{brief.text.replace(/\*\*/g, '')}</p>}
+      {brief && !sections && <p className="whitespace-pre-wrap text-base leading-relaxed">{brief.text.replace(/\*\*/g, '')}</p>}
     </section>
   )
 }

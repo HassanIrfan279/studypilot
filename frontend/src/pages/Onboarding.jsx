@@ -21,7 +21,7 @@ function ProfileCard({ profile, onSave, saving }) {
   return (
     <section className="card">
       <h2 className="text-2xl font-extrabold flex items-center gap-2"><Sparkles size={22} className="text-amber-500" /> Here's what I learned about you</h2>
-      <p className="text-lg text-slate-700 mt-2 max-w-[75ch]">{profile.summary}</p>
+      <p className="text-base text-slate-700 mt-2 max-w-[75ch]">{profile.summary}</p>
       <dl className="mt-4">
         {row('Goal', profile.goals)}
         {row('Target GPA', profile.target_gpa)}
@@ -36,7 +36,7 @@ function ProfileCard({ profile, onSave, saving }) {
       {profile.weekly_blocks?.length > 0 && (
         <>
           <h3 className="font-bold mt-5 mb-2">Your week ({profile.weekly_blocks.length} fixed blocks)</h3>
-          <ul className="grid sm:grid-cols-2 gap-1.5 text-[15px]">
+          <ul className="grid sm:grid-cols-2 gap-1.5 text-sm">
             {profile.weekly_blocks.map((b, i) => (
               <li key={i} className="flex gap-2 bg-slate-50 rounded-lg px-3 py-1.5">
                 <span className="font-semibold w-24 shrink-0">{b.day.slice(0, 3)} {b.start}</span>
@@ -50,7 +50,7 @@ function ProfileCard({ profile, onSave, saving }) {
         <input type="checkbox" className="w-5 h-5" checked={addToCal} onChange={(e) => setAddToCal(e.target.checked)} />
         Add my classes and commitments to Google Calendar as weekly events
       </label>
-      <button className="btn-primary text-lg mt-5" onClick={() => onSave(addToCal)} disabled={saving}>
+      <button className="btn-primary text-base mt-5" onClick={() => onSave(addToCal)} disabled={saving}>
         {saving ? <><Loader2 className="animate-spin" size={20} /> Saving and re-planning…</> : 'Save and let StudyPilot re-plan around me'}
       </button>
     </section>
@@ -112,8 +112,8 @@ export default function Onboarding() {
       <div className="flex items-center gap-4">
         <span className="grid place-items-center w-14 h-14 rounded-2xl bg-slate-900 text-white"><GraduationCap size={30} /></span>
         <div>
-          <h1 className="text-3xl font-extrabold">Let's get to know you</h1>
-          <p className="text-slate-600 text-lg">A short interview so I can plan around your real life. About 3 minutes.</p>
+          <h1 className="text-2xl font-extrabold">Let's get to know you</h1>
+          <p className="text-slate-600 text-base">A short interview so I can plan around your real life. About 3 minutes.</p>
         </div>
       </div>
 
@@ -121,7 +121,7 @@ export default function Onboarding() {
         <div ref={box} className="h-[460px] overflow-y-auto p-5 space-y-3">
           {msgs.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'student' ? 'justify-end' : ''}`}>
-              <p className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-[17px] leading-relaxed whitespace-pre-wrap ${m.role === 'student' ? 'bg-brand text-white' : 'bg-slate-100'}`}>{m.text}</p>
+              <p className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-base leading-relaxed whitespace-pre-wrap ${m.role === 'student' ? 'bg-brand text-white' : 'bg-slate-100'}`}>{m.text}</p>
             </div>
           ))}
           {busy && <p className="flex items-center gap-2 text-slate-500"><Loader2 size={18} className="animate-spin" /> Thinking…</p>}
@@ -134,7 +134,7 @@ export default function Onboarding() {
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => uploadTimetable(e.target.files?.[0])} />
             <input value={input} onChange={(e) => setInput(e.target.value)} disabled={busy} autoFocus
               placeholder="Type your answer…" aria-label="Your answer"
-              className="flex-1 rounded-xl border border-slate-300 px-4 py-2 text-[17px] focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="flex-1 rounded-xl border border-slate-300 px-4 py-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <button className="btn-primary !px-3" disabled={busy || !input.trim()} aria-label="Send"><SendHorizontal size={20} /></button>
           </form>
         )}
