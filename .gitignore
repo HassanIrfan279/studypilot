@@ -1,0 +1,13 @@
+.env
+credentials.json
+token.json
+client_secret*.json
+*.db
+*.db-journal
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+.DS_Store
+cache/
