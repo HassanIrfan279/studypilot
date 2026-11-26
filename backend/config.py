@@ -32,7 +32,10 @@ DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 SYNC_INTERVAL_SECONDS = 10 if DEMO_MODE else int(os.getenv("SYNC_INTERVAL_SECONDS", "30"))
 DB_PATH = str(BASE_DIR / "studypilot.db")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-# WhatsApp alerts via Twilio (sandbox number by default)
+# WhatsApp alerts via CallMeBot (free): the student's number + the key CallMeBot sends them
+CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE", "")
+CALLMEBOT_APIKEY = os.getenv("CALLMEBOT_APIKEY", "")
+# Optional: WhatsApp via Twilio (sandbox number by default)
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM") or "whatsapp:+14155238886"

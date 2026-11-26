@@ -6,7 +6,8 @@ import re
 
 import requests
 
-from config import (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, WHATSAPP_TO)
+from config import (CALLMEBOT_APIKEY, CALLMEBOT_PHONE, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
+                    TWILIO_WHATSAPP_FROM, WHATSAPP_TO)
 from tools import telegram_tools as tg
 
 
@@ -35,13 +36,35 @@ def send_whatsapp(text: str) -> bool:
         return False
 
 
+def callmebot_enabled():
+    return bool(CALLMEBOT_PHONE and CALLMEBOT_APIKEY)
+
+
+def send_callmebot(text: str) -> bool:
+    """WhatsApp via CallMeBot (free; the student activates it once from their WhatsApp)."""
+    if not callmebot_enabled():
+        return False
+    try:
+        r = requests.get("https://api.callmebot.com/whatsapp.php", timeout=20,
+                         params={"phone": CALLMEBOT_PHONE, "text": _to_whatsapp(text)[:1000],
+                                 "apikey": CALLMEBOT_APIKEY})
+        ok = r.ok and "error" not in r.text.lower()[:300]
+        if not ok:
+            print("CallMeBot send failed:", r.status_code, r.text[:200])
+        return ok
+    except Exception as e:
+        print("CallMeBot error:", e)
+        return False
+
+
 def send(text: str) -> bool:
     """Send to every configured channel. True if at least one delivered."""
-    ok = send_whatsapp(text)
+    ok = send_callmebot(text)
+    ok = send_whatsapp(text) or ok
     if tg.enabled():
         ok = tg.send(text) or ok
     return ok
 
 
 def status():
-    return {"whatsapp": whatsapp_enabled(), "telegram": tg.enabled()}
+    return {"whatsapp": callmebot_enabled() or whatsapp_enabled(), "telegram": tg.enabled()}
