@@ -1,0 +1,40 @@
+# StudyPilot on one VM: the app + Caddy (automatic free HTTPS certificate).
+# Run from this folder:  sudo DOMAIN=<your-domain> docker compose up -d --build
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: ../backend/.env
+    environment:
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN}
+      OAUTH_REDIRECT_URI: https://${DOMAIN}/auth/callback
+      FRONTEND_URL: https://${DOMAIN}
+      DATA_DIR: /data
+      PORT: "8000"
+    volumes:
+      - studypilot-data:/data                       # database + sign-in + cache survive restarts
+      - ../backend/credentials.json:/app/backend/credentials.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data                            # keeps the HTTPS certificate
+    depends_on: [app]
+
+volumes:
+  studypilot-data:
+  caddy-data:

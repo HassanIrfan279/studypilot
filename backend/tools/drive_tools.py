@@ -9,9 +9,9 @@ import zipfile
 from pathlib import Path
 
 import google_clients as g
-from config import BASE_DIR
+from config import DATA_DIR
 
-CACHE_DIR = BASE_DIR / "cache"
+CACHE_DIR = DATA_DIR / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
 PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"

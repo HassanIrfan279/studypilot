@@ -38,7 +38,11 @@ STUDY_WINDOW_START = os.getenv("STUDY_WINDOW_START", "09:00")
 STUDY_WINDOW_END = os.getenv("STUDY_WINDOW_END", "23:00")
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 SYNC_INTERVAL_SECONDS = 10 if DEMO_MODE else int(os.getenv("SYNC_INTERVAL_SECONDS", "30"))
-DB_PATH = str(BASE_DIR / "studypilot.db")
+# Where the database + lecture cache live. On a server, point DATA_DIR at a persistent disk
+# (e.g. /data) so the Google sign-in and everything StudyPilot learned survive restarts/redeploys.
+DATA_DIR = Path(os.getenv("DATA_DIR") or BASE_DIR)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = str(DATA_DIR / "studypilot.db")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 # Phone alerts via a private Discord channel webhook (works where Telegram/WhatsApp APIs don't)
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
