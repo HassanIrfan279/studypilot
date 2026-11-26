@@ -1,6 +1,8 @@
 """Builds Google API clients and provides a retry helper with exponential backoff."""
 import time
 
+import httplib2
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 
 from auth import get_credentials
@@ -15,7 +17,9 @@ def _service(name, version):
     if not creds:
         raise NotLoggedIn("Please sign in with Google first.")
     # A fresh client per call keeps things thread-safe (httplib2 is not).
-    return build(name, version, credentials=creds, cache_discovery=False)
+    # 30s timeout so a dropped Wi-Fi connection can never hang the server.
+    http = AuthorizedHttp(creds, http=httplib2.Http(timeout=30))
+    return build(name, version, http=http, cache_discovery=False)
 
 
 def classroom():

@@ -16,6 +16,13 @@ def _when(iso):
     return datetime.fromisoformat(iso).astimezone(ZoneInfo(TIMEZONE)).strftime("%a %d %b, %I:%M %p")
 
 
+def _is_recent(iso, days=30):
+    if not iso:
+        return False
+    when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return (datetime.now(when.tzinfo) - when).days <= days
+
+
 def _analyze(file_id, title):
     try:
         st.analyze_lecture(file_id)
@@ -27,11 +34,19 @@ def handle(result):
     changes, first = result["changes"], result["first_run"]
 
     if first:
-        log("Coordinator", f"First sync: {result['courses']} courses, {result['items']} deadlines, "
-                           f"{result['materials']} lecture files. Plan: Tutor reads lectures → "
-                           "Planner books study time.")
-        for m in [c["material"] for c in changes if c["type"] == "new_material"]:
-            _analyze(m["file_id"], m["title"])
+        upcoming = [i for i in st.upcoming_items(14) if i["due"]]
+        log("Coordinator", f"First sync: {result['courses']} courses, {len(upcoming)} upcoming "
+                           f"deadline(s), {result['materials']} files. Plan: Tutor reads the "
+                           "lectures that matter now → Planner books study time.")
+        refresh()
+        targets = []
+        for it in sorted(upcoming, key=lambda i: i["due"]):
+            for fid in st.lectures_for_assessment(it["id"], limit=3):
+                if fid not in targets:
+                    targets.append(fid)
+        for fid in targets[:8]:
+            m = db.one("SELECT title FROM materials WHERE file_id=?", (fid,))
+            _analyze(fid, m["title"] if m else fid)
         planner.plan_unplanned()
         db.cache_delete("brief")
         refresh()
@@ -44,6 +59,8 @@ def handle(result):
     # 1) New lectures first — plans and prep packs depend on them
     for c in [c for c in changes if c["type"] == "new_material"]:
         m = c["material"]
+        if not _is_recent(m.get("created")):
+            continue
         log("Coordinator", f"New lecture in {st.course_name(m['course_id'])}: '{m['title']}'. "
                            "Asking Tutor to analyze it.")
         _analyze(m["file_id"], m["title"])

@@ -254,18 +254,31 @@ def readiness(assessment_id):
 
 
 # ---------- hidden deadlines in announcements ----------
-def extract_hidden_deadlines(text, posted_iso):
-    key = "hidden:" + hashlib.sha1((text + posted_iso).encode()).hexdigest()
+def extract_course_deadlines(course, announcements):
+    """Read ALL recent announcements of one course together (oldest first) and return the
+    CURRENT deadlines: later posts override earlier ones (postponed / cancelled)."""
+    anns = [a for a in announcements if len(a["text"].strip()) >= 10]
+    if not anns:
+        return []
+    anns.sort(key=lambda a: a["created"] or a["update_time"])
+    feed = "\n\n".join(
+        f"[Posted {datetime.fromisoformat(a['created'].replace('Z', '+00:00')).astimezone(now_local().tzinfo):%A %Y-%m-%d %H:%M}]\n{a['text'][:1500]}"
+        for a in anns)
+    key = "hidden:" + hashlib.sha1((course + feed).encode()).hexdigest()
     cached = db.cache_get(key)
     if cached is not None:
         return cached
-    if len(text.strip()) < 10:
-        return []
     out = gemini.generate_json(
-        f"Today is {now_local():%A %Y-%m-%d}. This class announcement was posted on {posted_iso}. "
-        "Find every deadline, quiz, test or submission mentioned in plain text. Resolve relative "
-        "dates like 'next Monday' using the posted date. If the date is unclear set ambiguous=true. "
-        "Return an empty list if there are none.\n\nANNOUNCEMENT:\n" + text, FoundDeadlines)
+        f"Today is {now_local():%A %Y-%m-%d}. Below are a teacher's announcements for the course "
+        f"'{course}', oldest first. Find every quiz, test, viva, exam or submission deadline that "
+        "is written in plain text. Later announcements UPDATE earlier ones: if a quiz is "
+        "postponed, return it once with the NEW date; if it is cancelled and not rescheduled, "
+        "leave it out. Resolve relative dates ('upcoming Monday', 'next week') from the date the "
+        "announcement was posted. For an in-class quiz with no time given use due_time 09:00. "
+        "Use a short stable title like 'Quiz - Chapter 3'. Set ambiguous=true only if the DAY "
+        "cannot be worked out. kind is 'quiz' for quiz/test/viva/exam, else 'assignment'. "
+        "Ignore deadlines that are already in the past. Return an empty list if none.\n\n" + feed,
+        FoundDeadlines)
     found = out["deadlines"]
     db.cache_set(key, found)
     return found
@@ -275,8 +288,17 @@ def extract_hidden_deadlines(text, posted_iso):
 def upcoming_items(days=14):
     rows = db.query("SELECT * FROM items WHERE active=1 ORDER BY due IS NULL, due")
     out = []
+    month_ago = (datetime.now(timezone.utc).timestamp() - 30 * 86400)
     for r in rows:
         dl = days_left(r["due"])
+        if dl is None:
+            # undated work only matters if the teacher touched it recently
+            try:
+                fresh = datetime.fromisoformat(r["update_time"].replace("Z", "+00:00")).timestamp() > month_ago
+            except Exception:
+                fresh = False
+            if not fresh:
+                continue
         if dl is None or -0.5 <= dl <= days:
             r["days_left"] = dl
             r["course_name"] = course_name(r["course_id"])

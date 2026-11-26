@@ -13,7 +13,7 @@ client = (genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(ti
           if GEMINI_API_KEY else None)
 
 # Only 2 Gemini calls at a time -> stays inside free-tier rate limits
-_queue = threading.Semaphore(2)
+_queue = threading.Semaphore(3)
 
 
 class GeminiError(Exception):

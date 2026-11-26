@@ -1,5 +1,7 @@
 """Sync agent: pulls Classroom, saves a snapshot in SQLite, and detects what changed."""
-from datetime import datetime
+import re
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import db
@@ -7,6 +9,8 @@ from activity_log import log
 from config import TIMEZONE
 from tools import classroom_tools as cr
 from tools import study_tools as st
+
+RECENT_DAYS = 21  # only announcements from the last 3 weeks can contain live deadlines
 
 
 def _hidden_due(d):
@@ -16,49 +20,74 @@ def _hidden_due(d):
     try:
         t = (d["due_time"] or "23:59")[:5]
         local = datetime.fromisoformat(f"{d['due_date']}T{t}").replace(tzinfo=ZoneInfo(TIMEZONE))
-        return local.astimezone(ZoneInfo("UTC")).isoformat()
+        return local.astimezone(timezone.utc).isoformat()
     except ValueError:
         return None
+
+
+def _slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40]
+
+
+def _recent(iso, days=RECENT_DAYS):
+    if not iso:
+        return False
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")) > datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _fetch_course(c):
+    """Everything for one course (runs in parallel with other courses)."""
+    items, materials = [], []
+    work = cr.list_coursework(c["id"])
+    mats = cr.list_materials(c["id"])
+    anns = cr.list_announcements(c["id"])
+    for w in work:
+        items.append(w)
+        for f in w["files"]:
+            materials.append({**f, "course_id": c["id"], "item_id": w["id"], "created": w["update_time"]})
+    for m in mats:
+        for f in m["files"]:
+            materials.append({**f, "course_id": c["id"], "item_id": None, "created": m["update_time"]})
+    for a in anns:
+        for f in a["files"]:
+            materials.append({**f, "course_id": c["id"], "item_id": None, "created": a["update_time"]})
+
+    # Hidden deadlines: one Gemini call per course, reading recent announcements in order
+    recent = [a for a in anns if _recent(a["created"] or a["update_time"])]
+    if recent:
+        try:
+            found = st.extract_course_deadlines(c["name"], recent)
+        except Exception as e:
+            log("Sync", f"Couldn't read {c['name']} announcements with Gemini: {e}", "warn")
+            found = []
+        for d in found:
+            items.append({"id": f"ann-{c['id']}-{_slug(d['title'])}", "course_id": c["id"],
+                          "title": d["title"], "description": "Found in a class announcement",
+                          "kind": "quiz" if d["kind"] == "quiz" or cr.QUIZ_WORDS.search(d["title"])
+                          else "assignment",
+                          "due": _hidden_due(d), "update_time": recent[0]["update_time"],
+                          "link": recent[0]["link"], "files": [], "source": "announcement"})
+        if found:
+            log("Sync", f"🔎 Gemini found {len(found)} deadline(s) hidden in {c['name']} "
+                        f"announcements: {', '.join(d['title'] for d in found)}.")
+    return items, materials
 
 
 def fetch_all():
     """Read everything from Classroom. Returns (courses, items, materials)."""
     courses = cr.list_courses()
     items, materials = [], []
-    for c in courses:
-        for w in cr.list_coursework(c["id"]):
-            items.append(w)
-            for f in w["files"]:
-                materials.append({**f, "course_id": c["id"], "item_id": w["id"],
-                                  "created": w["update_time"]})
-        for m in cr.list_materials(c["id"]):
-            for f in m["files"]:
-                materials.append({**f, "course_id": c["id"], "item_id": None,
-                                  "created": m["update_time"]})
-        for a in cr.list_announcements(c["id"]):
-            for f in a["files"]:
-                materials.append({**f, "course_id": c["id"], "item_id": None,
-                                  "created": a["update_time"]})
-            # Hidden deadlines written in plain text ("submit by next Monday")
-            try:
-                found = st.extract_hidden_deadlines(a["text"], a["created"] or a["update_time"])
-            except Exception as e:
-                log("Sync", f"Couldn't read an announcement with Gemini: {e}", "warn")
-                found = []
-            for i, d in enumerate(found):
-                items.append({"id": f"ann-{a['id']}-{i}", "course_id": c["id"], "title": d["title"],
-                              "description": a["text"][:500],
-                              "kind": "quiz" if cr.QUIZ_WORDS.search(f"{d['kind']} {d['title']}")
-                              else "assignment",
-                              "due": _hidden_due(d), "update_time": a["update_time"],
-                              "link": a["link"], "files": [], "source": "announcement"})
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for its, mats in pool.map(_fetch_course, courses):
+            items.extend(its)
+            materials.extend(mats)
     return courses, items, materials
 
 
 def run_sync():
     """Returns a list of change dicts: {type: added|removed|due_changed|new_material, ...}."""
     courses, items, materials = fetch_all()
-    first_run = db.one("SELECT COUNT(*) n FROM items")["n"] == 0 and not db.kv_get("synced_once")
+    first_run = not db.kv_get("synced_once")
 
     for idx, c in enumerate(courses):
         existing = db.one("SELECT color FROM courses WHERE id=?", (c["id"],))
