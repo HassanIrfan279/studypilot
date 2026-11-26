@@ -1,4 +1,6 @@
 """Tutor tool: find the best YouTube explainer videos for a topic (YouTube Data API v3)."""
+import html
+
 import requests
 
 import db
@@ -20,8 +22,8 @@ def find_videos(topic: str, n: int = 3):
         r.raise_for_status()
     except Exception:
         return []
-    videos = [{"video_id": it["id"]["videoId"], "title": it["snippet"]["title"],
-               "channel": it["snippet"]["channelTitle"],
+    videos = [{"video_id": it["id"]["videoId"], "title": html.unescape(it["snippet"]["title"]),
+               "channel": html.unescape(it["snippet"]["channelTitle"]),
                "thumbnail": it["snippet"]["thumbnails"]["medium"]["url"],
                "url": f"https://www.youtube.com/watch?v={it['id']['videoId']}"}
               for it in r.json().get("items", [])]
