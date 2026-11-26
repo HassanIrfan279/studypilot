@@ -161,7 +161,9 @@ export default function App() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    api.get('/api/me').then(setMe).catch(() => setError("Can't reach the StudyPilot backend on localhost:8000. Start it with .\\start.ps1"))
+    api.get('/api/me').then(setMe).catch(() => setError(import.meta.env.DEV
+      ? "Can't reach the StudyPilot backend on localhost:8000. Start it with .\\start.ps1"
+      : "Can't reach the StudyPilot server. It may be waking up, so refresh in 30 seconds."))
   }, [])
 
   if (error) return <div className="p-10 text-xl text-red-800">{error}</div>

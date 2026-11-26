@@ -1,0 +1,12 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+frontend/dist
+backend/.env
+backend/credentials.json
+backend/token.json
+backend/*.db
+backend/*.db-journal
+backend/cache
+.git

@@ -23,6 +23,14 @@ LIVE_MODEL_CHAIN = [GEMINI_LIVE_MODEL] + [m.strip() for m in os.getenv(
     if m.strip() and m.strip() != GEMINI_LIVE_MODEL]
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 CLIENT_SECRETS = str(BASE_DIR / os.getenv("GOOGLE_CLIENT_SECRETS", "credentials.json"))
+# On a host (Render/Cloud Run) the OAuth client JSON comes from a secret env var instead of a file
+if os.getenv("GOOGLE_CREDENTIALS_JSON") and not Path(CLIENT_SECRETS).exists():
+    Path(CLIENT_SECRETS).write_text(os.getenv("GOOGLE_CREDENTIALS_JSON"), encoding="utf-8")
+# Deployed: set PUBLIC_URL (e.g. https://studypilot.onrender.com) and both of these follow it
+PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
+if PUBLIC_URL:
+    os.environ.setdefault("OAUTH_REDIRECT_URI", f"{PUBLIC_URL}/auth/callback")
+    os.environ.setdefault("FRONTEND_URL", PUBLIC_URL)
 OAUTH_REDIRECT_URI = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:8000/auth/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Karachi")

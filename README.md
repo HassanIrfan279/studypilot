@@ -76,3 +76,12 @@ Python · FastAPI · Google ADK · google-genai (Gemini Flash + Gemini Live) · 
 
 ## Roadmap
 WhatsApp alerts once Meta verifies the business, a teacher dashboard, group study, and a mobile app.
+
+## Deploy (Render, free)
+
+The `Dockerfile` builds the React app and serves it from FastAPI, so the whole app is one service.
+
+1. On Render: **New → Web Service**, connect this repo. Runtime: **Docker**, instance type: **Free**.
+2. Environment variables: `GEMINI_API_KEY`, `YOUTUBE_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `GEMINI_LIVE_MODEL`, `GEMINI_LIVE_FALLBACKS`, `DISCORD_WEBHOOK_URL`, `TIMEZONE=Asia/Karachi`, `DEMO_MODE=true`, `PUBLIC_URL=https://<your-service>.onrender.com`, and `GOOGLE_CREDENTIALS_JSON` (the full contents of `credentials.json`).
+3. In Google Cloud → Credentials → your OAuth client, add the redirect URI `https://<your-service>.onrender.com/auth/callback`.
+4. Open the URL and sign in. Free instances sleep after 15 min idle and lose the SQLite file on restart, so point a free uptime pinger at `/health`.

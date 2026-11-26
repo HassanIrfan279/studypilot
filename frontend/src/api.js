@@ -1,6 +1,9 @@
 // Tiny wrapper around the backend API
-export const API_BASE = 'http://localhost:8000'
-export const WS_BASE = 'ws://localhost:8000'
+// Dev: Vite on :5173 talks to the backend on :8000. Deployed: one server, same origin.
+const DEV = import.meta.env.DEV
+export const API_BASE = DEV ? 'http://localhost:8000' : ''
+export const WS_BASE = DEV ? 'ws://localhost:8000'
+  : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
 
 async function request(path, options = {}) {
   const res = await fetch(API_BASE + path, {

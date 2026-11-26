@@ -7,7 +7,9 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from pathlib import Path
+
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 import activity_log
@@ -500,3 +502,16 @@ async def ws_activity(ws: WebSocket):
 @app.websocket("/ws/voice")
 async def ws_voice(ws: WebSocket):
     await voice_agent.voice_session(ws)
+
+
+# ---------- deployed: serve the built React app from the same server ----------
+DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if DIST.exists():
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str):
+        f = (DIST / path).resolve()
+        if path and f.is_file() and DIST in f.parents:
+            return FileResponse(f)
+        if path.startswith(("api/", "auth/", "ws/")):
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        return FileResponse(DIST / "index.html")
