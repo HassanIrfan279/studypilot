@@ -118,10 +118,16 @@ def handle(result):
     # 4) Removed deadlines -> clean up our events
     for c in [c for c in changes if c["type"] == "removed"]:
         it = c["item"]
-        log("Coordinator", f"'{it['title']}' was removed from Classroom. Clearing its study "
-                           "sessions.", "warn")
+        reason = db.kv_get(f"cancel_reason:{it['id']}") or ""
         planner.replan(it["id"])
-        spoken.append(f"{it['title']} was cancelled, so I cleared its study sessions.")
+        past = it.get("due") and st.days_left(it["due"]) is not None and st.days_left(it["due"]) < 0
+        if past:
+            continue  # it just finished — nothing to announce
+        log("Coordinator", f"'{it['title']}' was cancelled"
+                           f"{f' (teacher: “{reason}”)' if reason else ' / removed from Classroom'}. "
+                           "Cleared its study sessions.", "warn")
+        spoken.append(f"{it['title']} in {st.course_name(it['course_id'])} was cancelled, "
+                      "so I cleared its study sessions and freed up that time.")
 
     db.cache_delete("brief")
     for s in spoken:

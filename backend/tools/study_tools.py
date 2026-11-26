@@ -64,6 +64,8 @@ class FoundDeadline(BaseModel):
     due_date: str      # YYYY-MM-DD or "" if unknown
     due_time: str      # HH:MM 24h or ""
     ambiguous: bool
+    status: str        # "active" or "cancelled"
+    evidence: str      # short quote from the announcement that supports this
 
 
 class FoundDeadlines(BaseModel):
@@ -272,9 +274,10 @@ def readiness(assessment_id):
 
 
 # ---------- hidden deadlines in announcements ----------
-def extract_course_deadlines(course, announcements):
+def extract_course_deadlines(course, announcements, tracked=None):
     """Read ALL recent announcements of one course together (oldest first) and return the
-    CURRENT deadlines: later posts override earlier ones (postponed / cancelled)."""
+    CURRENT deadlines with a status. `tracked` = deadlines we already know about, so Gemini
+    updates them by the same title instead of inventing new ones."""
     anns = [a for a in announcements if len(a["text"].strip()) >= 10]
     if not anns:
         return []
@@ -282,20 +285,27 @@ def extract_course_deadlines(course, announcements):
     feed = "\n\n".join(
         f"[Posted {datetime.fromisoformat(a['created'].replace('Z', '+00:00')).astimezone(now_local().tzinfo):%A %Y-%m-%d %H:%M}]\n{a['text'][:1500]}"
         for a in anns)
-    key = "hidden:" + hashlib.sha1((course + feed).encode()).hexdigest()
+    known = "\n".join(f"- {t['title']} ({t['kind']}), due {t['due'] or 'unknown'}"
+                      for t in (tracked or [])) or "- none"
+    key = "hidden:" + hashlib.sha1((course + feed + known).encode()).hexdigest()
     cached = db.cache_get(key)
     if cached is not None:
         return cached
     out = gemini.generate_json(
         f"Today is {now_local():%A %Y-%m-%d}. Below are a teacher's announcements for the course "
-        f"'{course}', oldest first. Find every quiz, test, viva, exam or submission deadline that "
-        "is written in plain text. Later announcements UPDATE earlier ones: if a quiz is "
-        "postponed, return it once with the NEW date; if it is cancelled and not rescheduled, "
-        "leave it out. Resolve relative dates ('upcoming Monday', 'next week') from the date the "
-        "announcement was posted. For an in-class quiz with no time given use due_time 09:00. "
-        "Use a short stable title like 'Quiz - Chapter 3'. Set ambiguous=true only if the DAY "
-        "cannot be worked out. kind is 'quiz' for quiz/test/viva/exam, else 'assignment'. "
-        "Ignore deadlines that are already in the past. Return an empty list if none.\n\n" + feed,
+        f"'{course}', oldest first, and the deadlines we ALREADY TRACK for this course.\n"
+        "Return the full current list of quiz / test / viva / exam / submission deadlines:\n"
+        "1. Every already-tracked deadline must appear again with EXACTLY the same title.\n"
+        "2. Later announcements update earlier ones. If one is postponed, give the new date. If "
+        "the new date is vague (e.g. 'week after next'), set ambiguous=true.\n"
+        "3. status='cancelled' ONLY if an announcement clearly cancels THAT specific item "
+        "(e.g. 'quiz cancelled' cancels a quiz, never a viva or a different item). Otherwise "
+        "status='active'.\n"
+        "4. Add new deadlines found in the text with a short stable title like 'Quiz - Chapter 3'.\n"
+        "5. Resolve relative dates ('upcoming Monday') from the date the announcement was posted. "
+        "For an in-class quiz with no time use 09:00. kind='quiz' for quiz/test/viva/exam, else "
+        "'assignment'. Put a short supporting quote in evidence.\n\n"
+        f"ALREADY TRACKED:\n{known}\n\nANNOUNCEMENTS:\n{feed}",
         FoundDeadlines)
     found = out["deadlines"]
     db.cache_set(key, found)

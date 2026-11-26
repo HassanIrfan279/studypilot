@@ -14,16 +14,21 @@ from tools import study_tools as st
 TZ = ZoneInfo(TIMEZONE)
 
 
-def _find_item(name: str):
-    """Fuzzy-match a deadline by title or course name."""
-    items = st.upcoming_items(30)
+def _find_item(name: str, prefer_kind: str = None):
+    """Fuzzy-match a deadline by title or course name. prefer_kind='quiz' favours quizzes
+    (so 'quiz me on DAA' picks the DAA quiz, not a DAA assignment)."""
+    items = [i for i in st.upcoming_items(30) if i["due"]] or st.upcoming_items(30)
     if not items:
         return None
     name = (name or "").lower()
     scored = []
     for i in items:
         label = f"{i['course_name']} {i['title']}".lower()
-        score = difflib.SequenceMatcher(None, name, label).ratio() + (0.5 if name and name in label else 0)
+        score = difflib.SequenceMatcher(None, name, label).ratio()
+        score += 0.5 if name and name in label else 0
+        score += 0.6 if i["course_name"].lower() in name or name in i["course_name"].lower() else 0
+        score += 0.4 if prefer_kind and i["kind"] == prefer_kind else 0
+        score -= 0.1 * min((i.get("days_left") or 0), 10) / 10  # sooner = slightly better
         scored.append((score, i))
     scored.sort(key=lambda x: x[0], reverse=True)
     return scored[0][1]
@@ -71,7 +76,7 @@ def explain_lecture(topic: str, in_urdu: bool = False) -> dict:
 def start_quiz(assessment_or_course: str) -> dict:
     """Start a practice quiz for a quiz/assignment or course. Returns the questions so you can
     ask them one by one. Also opens the quiz on screen."""
-    item = _find_item(assessment_or_course)
+    item = _find_item(assessment_or_course, prefer_kind="quiz")
     if not item:
         return {"error": "No upcoming assessments found."}
     pack = st.build_prep_pack(item["id"])
@@ -83,7 +88,7 @@ def start_quiz(assessment_or_course: str) -> dict:
 def get_readiness(assessment_or_course: str) -> dict:
     """How ready the student is (0-100%) for a quiz/assignment, from study sessions done and
     practice quiz scores."""
-    item = _find_item(assessment_or_course)
+    item = _find_item(assessment_or_course, prefer_kind="quiz")
     if not item:
         return {"error": "No upcoming assessments found."}
     return {"assessment": item["title"], "course": item["course_name"], "due": _fmt(item["due"]),
@@ -124,7 +129,7 @@ def replan_assessment(assessment_or_course: str) -> dict:
 
 def start_panic_mode(assessment_or_course: str, minutes_available: int = 120) -> dict:
     """Emergency mode when a quiz is very soon: makes a 20-minute cram sheet + 5 rapid questions."""
-    item = _find_item(assessment_or_course)
+    item = _find_item(assessment_or_course, prefer_kind="quiz")
     if not item:
         return {"error": "No upcoming assessments found."}
     sheet = st.panic_mode(item["id"], minutes_available)

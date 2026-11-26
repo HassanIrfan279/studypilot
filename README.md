@@ -12,7 +12,7 @@ Built for **Google AI Agent-a-thon 2026, FAST University (CFD campus).**
 |---|---|
 | Google sign-in | OAuth 2.0 with read-only Classroom/Drive scopes |
 | Classroom sync | Courses, assignments, quizzes, announcements and lecture files, polled every 30s |
-| Hidden deadlines | Gemini reads announcement text ("submit by next Monday") and pulls out due dates |
+| Hidden deadlines | Gemini reads each course's announcement thread in order ("quiz Monday" → "cancelled" → "moved to next week") and keeps the *current* deadlines, quoting the teacher's words as evidence. A deadline is only dropped when an announcement clearly cancels it. |
 | Deadline dashboard | Sorted by urgency, colour per course, days-left badges |
 | Lecture breakdown | Gemini reads the PDF, Google Slides or PPTX and returns a summary, concepts in simple words, and likely exam points |
 | Urdu toggle | One click turns any explanation into simple Urdu |
@@ -58,6 +58,13 @@ Built for **Google AI Agent-a-thon 2026, FAST University (CFD campus).**
    npm run dev
    ```
 5. Open http://localhost:5173 and click **Sign in with Google**.
+
+After the first setup, `.\start.ps1` starts both servers in one go. Before a demo, run `POST /api/warmup` to pre-analyze lectures and build the prep packs. See [DEMO.md](DEMO.md) for the full runbook.
+
+### Models
+- Text: `gemini-3.5-flash-lite`, with automatic fallback to other Flash models when Google returns 503/429/504.
+- Voice: `gemini-3.8-live` (native audio, tool calling), falling back to `gemini-3.1-flash-live-preview`.
+- All model IDs live in `backend/.env`, never in code.
 
 ## Tech
 Python · FastAPI · Google ADK · google-genai (Gemini Flash + Gemini Live) · Classroom / Drive / Calendar / YouTube APIs · SQLite · React · Vite · Tailwind

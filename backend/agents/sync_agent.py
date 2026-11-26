@@ -53,26 +53,57 @@ def _fetch_course(c):
             materials.append({**f, "course_id": c["id"], "item_id": None, "created": a["update_time"]})
 
     # Hidden deadlines: one Gemini call per course, reading recent announcements in order
+    # Deadlines we already track from this course's announcements
+    tracked_rows = db.query("SELECT * FROM items WHERE course_id=? AND source='announcement' "
+                            "AND active=1", (c["id"],))
+    tracked = {r["title"].lower(): r for r in tracked_rows}
     recent = [a for a in anns if _recent(a["created"] or a["update_time"])]
+    found, ok = [], True
     if recent:
         try:
-            found = st.extract_course_deadlines(c["name"], recent)
+            found = st.extract_course_deadlines(
+                c["name"], recent,
+                [{"title": r["title"], "kind": r["kind"], "due": _local(r["due"])} for r in tracked_rows])
         except Exception as e:
-            log("Sync", f"Couldn't read {c['name']} announcements with Gemini: {e}", "warn")
-            found = []
-        for d in found:
-            items.append({"id": f"ann-{c['id']}-{_slug(d['title'])}", "course_id": c["id"],
-                          "title": d["title"], "description": "Found in a class announcement",
-                          "kind": "quiz" if d["kind"] == "quiz" or cr.QUIZ_WORDS.search(d["title"])
-                          else "assignment",
-                          "due": _hidden_due(d), "update_time": recent[0]["update_time"],
-                          "link": recent[0]["link"], "files": [], "source": "announcement"})
-        known = {r["id"] for r in db.query("SELECT id FROM items WHERE course_id=? AND "
-                                           "source='announcement'", (c["id"],))}
-        if any(f"ann-{c['id']}-{_slug(d['title'])}" not in known for d in found):
-            log("Sync", f"🔎 Gemini found {len(found)} deadline(s) hidden in {c['name']} "
-                        f"announcements: {', '.join(d['title'] for d in found)}.")
+            ok = False
+            log("Sync", f"Couldn't read {c['name']} announcements with Gemini — keeping the "
+                        f"deadlines I already know ({type(e).__name__}).", "warn")
+
+    seen, new_titles = set(), []
+    for d in found:
+        prev = tracked.get(d["title"].lower())
+        if d.get("status") == "cancelled":
+            if prev:
+                seen.add(prev["id"])  # tracked + clearly cancelled -> let it be removed
+                db.kv_set(f"cancel_reason:{prev['id']}", d.get("evidence", ""))
+            continue
+        item_id = prev["id"] if prev else f"ann-{c['id']}-{_slug(d['title'])}"
+        if not prev:
+            new_titles.append(d["title"])
+        items.append({"id": item_id, "course_id": c["id"], "title": prev["title"] if prev else d["title"],
+                      "description": d.get("evidence") or "Found in a class announcement",
+                      "kind": "quiz" if d["kind"] == "quiz" or cr.QUIZ_WORDS.search(d["title"])
+                      else "assignment",
+                      "due": _hidden_due(d), "update_time": recent[-1]["update_time"] if recent else "",
+                      "link": recent[0]["link"] if recent else "", "files": [],
+                      "source": "announcement"})
+        seen.add(item_id)
+    # Safety net: never drop a tracked deadline unless an announcement clearly cancelled it
+    for r in tracked_rows:
+        if r["id"] not in seen or not ok:
+            if any(i["id"] == r["id"] for i in items):
+                continue
+            items.append({**r, "files": []})
+    if new_titles:
+        log("Sync", f"🔎 Gemini found {len(new_titles)} deadline(s) hidden in {c['name']} "
+                    f"announcements: {', '.join(new_titles)}.")
     return items, materials
+
+
+def _local(iso):
+    if not iso:
+        return None
+    return datetime.fromisoformat(iso).astimezone(ZoneInfo(TIMEZONE)).strftime("%a %Y-%m-%d %H:%M")
 
 
 def fetch_all():
