@@ -64,7 +64,7 @@ export default function ActivityLog() {
                   <span className="text-slate-500 tabular">{new Date(l.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                 </div>
                 <p className={`text-sm leading-snug ${l.level === 'error' ? 'text-red-900' : 'text-slate-900'}`}>
-                  {l.message.replace(/^[🔊🛠📅🔎✅✔💬🎙🚨]\s*/u, '')}
+                  {(l.message || '').replace(/^[🔊🛠📅🔎✅✔💬🎙🚨]\s*/u, '')}
                 </p>
               </div>
             </li>

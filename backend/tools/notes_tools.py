@@ -272,8 +272,8 @@ def topic_folder(assessment_id):
 
 def sync_to_drive(assessment_id):
     """Put the notes (as a Google Doc) + shortcuts to the lectures in the topic folder."""
-    notes = get_notes(assessment_id)
     with _drive_lock:
+        notes = get_notes(assessment_id)  # read inside the lock so two syncs can't both create a Doc
         folder, item = topic_folder(assessment_id)
         for fid in st.lectures_for_assessment(assessment_id, limit=4):
             m = db.one("SELECT title FROM materials WHERE file_id=?", (fid,))

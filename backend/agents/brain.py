@@ -6,6 +6,7 @@ results, verifies its own work in Google Calendar, and tells the student what it
 Each thought and action is streamed to the UI. If Gemini fails, the caller falls back to
 the fixed rule-based pipeline, so the student is never left without a plan.
 """
+import time
 import json
 import threading
 from datetime import datetime, timedelta, timezone
@@ -25,6 +26,7 @@ from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 
 TZ = ZoneInfo(TIMEZONE)
 MAX_STEPS = 14
+RUN_BUDGET = 90  # seconds: a single agent run can never block the demo for long
 _ctx = threading.local()  # which run the tools are reporting to
 
 
@@ -282,8 +284,17 @@ def _human(name, args):
     return f"{name.replace('_', ' ')}({a})"
 
 
+_one_run_at_a_time = threading.Lock()
+
+
 def think_and_act(trigger: str, title: str, situation: str) -> bool:
-    """Run Gemini's reasoning loop for one trigger. Returns True on success."""
+    """Run Gemini's reasoning loop for one trigger. Returns True on success.
+    Runs are serialized: two runs planning at once would both pick the same free slot."""
+    with _one_run_at_a_time:
+        return _think_and_act(trigger, title, situation)
+
+
+def _think_and_act(trigger: str, title: str, situation: str) -> bool:
     run_id = runs.start(trigger, title)
     _ctx.run_id = run_id
     now = datetime.now(TZ).strftime("%A %d %b %Y %H:%M")
@@ -292,10 +303,15 @@ def think_and_act(trigger: str, title: str, situation: str) -> bool:
         system_instruction=SYSTEM, temperature=0.2,
         tools=[types.Tool(function_declarations=_decls())],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
-    notified, summary = False, ""
+    notified, summary, acted = False, "", False
+    started = time.time()
+    config.http_options = types.HttpOptions(timeout=25_000)
     try:
         for _ in range(MAX_STEPS):
-            resp = gemini._call(contents, config)
+            if time.time() - started > RUN_BUDGET:
+                runs.step(run_id, "warn", "Took too long, so I'm wrapping up with what's done.")
+                break
+            resp = gemini._call(contents, config, budget=40)
             cand = resp.candidates[0].content if resp.candidates else None
             if not cand or not cand.parts:
                 break
@@ -311,6 +327,7 @@ def think_and_act(trigger: str, title: str, situation: str) -> bool:
             for fc in calls:
                 args = dict(fc.args or {})
                 runs.step(run_id, "act", _human(fc.name, args))
+                acted = True
                 fn = TOOL_MAP.get(fc.name)
                 try:
                     out = fn(**args) if fn else {"error": f"unknown tool {fc.name}"}
@@ -323,11 +340,22 @@ def think_and_act(trigger: str, title: str, situation: str) -> bool:
                     notified = True
                 replies.append(types.Part.from_function_response(name=fc.name, response={"result": out}))
             contents.append(types.Content(role="user", parts=replies))
+        if not notified and acted:
+            notify_student(summary[:300] if summary else f"I handled it: {title}.")
         runs.finish(run_id, "done", summary or "Done.")
         db.cache_delete("brief")
         refresh()
         return True
     except Exception as e:
+        if acted:
+            # Tools already changed the calendar: don't let the backup rules do it all a second time
+            runs.step(run_id, "warn", f"Gemini stopped mid-run ({type(e).__name__}); keeping what's done.")
+            if not notified:
+                notify_student(f"I updated your plan for: {title}.")
+            runs.finish(run_id, "done", summary or "Done (partly).")
+            db.cache_delete("brief")
+            refresh()
+            return True
         log("Coordinator", f"Gemini brain failed ({type(e).__name__}) — using the backup "
                            "rule-based plan.", "warn")
         runs.step(run_id, "warn", f"Gemini unavailable: {e}. Switching to backup rules.")

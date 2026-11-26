@@ -28,19 +28,27 @@ def sync_once(verbose=False):
     try:
         if verbose:
             log("Sync", "Checking Google Classroom for changes…")
-        result = sync_agent.run_sync()
+        try:
+            result = sync_agent.run_sync()
+        except Exception as e:
+            log("Sync", f"Classroom unreachable ({type(e).__name__}) — showing last sync from "
+                        f"{_ago()}.", "error")
+            return {"ok": False, "error": str(e)}
         n = len(result["changes"])
         if n or verbose:
             log("Sync", f"Sync done: {n} change(s) found.", "success" if n else "info")
-        coordinator.handle(result)
+        try:
+            coordinator.handle(result)
+        except Exception as e:
+            log("Coordinator", f"Couldn't finish reacting to the changes ({type(e).__name__}: {e}).",
+                "warn")
         watcher.tick()  # react to the student's own calendar, missed sessions
         if not db.kv_get("markers_synced"):
             coordinator.sync_deadline_markers()  # one-time: put existing deadlines in Calendar
             db.kv_set("markers_synced", True)
         return {"ok": True, "changes": n}
     except Exception as e:
-        log("Sync", f"Classroom unreachable ({type(e).__name__}) — showing last sync from {_ago()}.",
-            "error")
+        log("Sync", f"Sync step failed ({type(e).__name__}: {e}).", "warn")
         return {"ok": False, "error": str(e)}
     finally:
         _lock.release()
@@ -53,7 +61,9 @@ async def loop():
             logged_in = await asyncio.to_thread(get_credentials)
         except Exception as e:
             logged_in = None
-            log("Sync", f"Google sign-in needs refreshing: {e}", "error")
+            if not db.kv_get("signin_warned"):
+                log("Sync", f"Google sign-in needs refreshing: {e}", "error")
+                db.kv_set("signin_warned", True)
         if logged_in:
             await asyncio.to_thread(sync_once, first)
             first = False

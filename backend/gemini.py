@@ -9,7 +9,7 @@ from google.genai import types
 from config import GEMINI_API_KEY, MODEL_CHAIN
 
 # 90s timeout per call so a stuck request can never freeze the demo
-client = (genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=60_000))
+client = (genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=45_000))
           if GEMINI_API_KEY else None)
 
 # Only 2 Gemini calls at a time -> stays inside free-tier rate limits
@@ -26,12 +26,16 @@ def _busy(e):
                                   "504", "DEADLINE", "timed out", "Timeout", "404"))
 
 
-def _call(contents, config):
-    """Try the main model; if Google says it's busy, fall back to the next model in the list."""
+def _call(contents, config, budget=100):
+    """Try the main model; if Google says it's busy, fall back to the next model in the list.
+    Gives up after `budget` seconds in total so nothing can hang for minutes."""
     if not client:
         raise GeminiError("GEMINI_API_KEY is missing in backend/.env")
     last = None
+    started = time.time()
     for model in MODEL_CHAIN:
+        if time.time() - started > budget:
+            break
         for attempt in range(2):
             try:
                 with _queue:

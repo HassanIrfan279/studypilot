@@ -1,6 +1,7 @@
 """Google OAuth: login redirect, callback, token storage + auto refresh."""
 import json
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -39,6 +40,9 @@ def handle_callback(full_url: str, state: str):
                and s.split("/")[-1] not in short
                and aliases.get(s.split("/")[-1]) not in short]
     _save(flow.credentials)
+    import time
+    db.kv_set("token_issued", time.time())
+    db.execute("DELETE FROM kv WHERE key='signin_warned'")
     db.kv_set("missing_scopes", [m.split("/")[-1] for m in missing])
     return missing
 
@@ -54,7 +58,14 @@ def get_credentials() -> Credentials | None:
     # Use the scopes the student actually granted (refresh fails if we ask for more)
     creds = Credentials.from_authorized_user_info(info, info.get("scopes") or SCOPES)
     if not creds.valid and creds.refresh_token:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except RefreshError:
+            # Testing-mode Google apps expire refresh tokens after 7 days -> show Sign in again
+            logout()
+            from activity_log import log
+            log("Coordinator", "Google sign-in expired. Please sign in again.", "error")
+            return None
         _save(creds)
     return creds
 

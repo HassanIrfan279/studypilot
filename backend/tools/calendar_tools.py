@@ -80,11 +80,29 @@ def nice_course(name):
                     for i, w in enumerate((name or "").split()))
 
 
+def _insert_once(svc, body):
+    """Insert with a client-chosen event id, so a retry after a network timeout can never create
+    a duplicate: Google answers 409 for the second insert and we just fetch the first one."""
+    import uuid
+    from googleapiclient.errors import HttpError
+    body = {**body, "id": uuid.uuid4().hex}  # hex digits are valid Calendar event-id characters
+
+    def go():
+        try:
+            return svc.events().insert(calendarId="primary", body=body).execute()
+        except HttpError as e:
+            if getattr(e.resp, "status", None) == 409:
+                return svc.events().get(calendarId="primary", eventId=body["id"]).execute()
+            raise
+    return g.with_retry(go)
+
+
 def create_study_event(item, course_name, start, end, idx, total, focus=None):
     svc = g.calendar()
     course_name = nice_course(course_name)
     if focus:
-        title = f"📘 {course_name}: extra session on {focus} ({item['title']})"
+        short = focus if len(focus) <= 50 else focus[:48].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+        title = f"📘 {nice_course(course_name)}: extra session on {short} ({item['title']})"
     else:
         title = f"📘 {course_name}: {item['title']} prep (Session {idx}/{total})"
     body = {
@@ -99,7 +117,7 @@ def create_study_event(item, course_name, start, end, idx, total, focus=None):
         "extendedProperties": {"private": {"studypilot": "true", "assessment_id": item["id"],
                                            "kind": "session"}},
     }
-    ev = g.with_retry(lambda: svc.events().insert(calendarId="primary", body=body).execute())
+    ev = _insert_once(svc, body)
     db.execute("INSERT OR REPLACE INTO sessions(event_id, assessment_id, title, start, end, done) "
                "VALUES (?,?,?,?,?,0)", (ev["id"], item["id"], title, start.isoformat(),
                                         end.isoformat()))
@@ -156,7 +174,7 @@ def upsert_deadline_event(item, course_name):
         g.with_retry(lambda: svc.events().patch(calendarId="primary", eventId=ev["id"],
                                                 body=body).execute())
         return "moved"
-    g.with_retry(lambda: svc.events().insert(calendarId="primary", body=body).execute())
+    _insert_once(svc, body)
     return "created"
 
 
@@ -226,7 +244,7 @@ def add_student_event(title, start_iso, end_iso):
     body = {"summary": title or "Busy",
             "start": {"dateTime": _parse_local(start_iso).isoformat(), "timeZone": TIMEZONE},
             "end": {"dateTime": _parse_local(end_iso).isoformat(), "timeZone": TIMEZONE}}
-    ev = g.with_retry(lambda: svc.events().insert(calendarId="primary", body=body).execute())
+    ev = _insert_once(svc, body)
     return {"id": ev["id"]}
 
 

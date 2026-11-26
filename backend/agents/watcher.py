@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import db
 from activity_log import announce, log, refresh
 from agents import brain
-from config import AGENT_BRAIN, TIMEZONE
+from config import AGENT_BRAIN, DEMO_MODE, TIMEZONE
 from tools import calendar_tools as cal
 from tools import study_tools as st
 from tools import notify as tg  # WhatsApp (Twilio) + Telegram
@@ -30,6 +30,19 @@ def _notify(msg):
     tg.send(f"📘 <b>StudyPilot</b>\n{msg}")
 
 
+_claim_lock = threading.Lock()
+
+
+def _claim(key):
+    """Atomically mark a trigger as handled. The API and the background sync both run checks,
+    so without this the same clash could start two agent runs and be announced twice."""
+    with _claim_lock:
+        if db.kv_get(key):
+            return False
+        db.kv_set(key, True)
+        return True
+
+
 # ---------------- 1. calendar clashes ----------------
 def check_clashes():
     now = datetime.now(timezone.utc)
@@ -42,10 +55,8 @@ def check_clashes():
         s_end = datetime.fromisoformat(s["end"])
         for ev in mine:
             if ev["start"] < s_end and ev["end"] > s_start:
-                key = f"clash:{s['event_id']}:{ev['id']}"
-                if db.kv_get(key):
+                if not _claim(f"clash:{s['event_id']}:{ev['id']}"):
                     continue
-                db.kv_set(key, True)
                 _handle_clash(s, ev)
                 break
 
@@ -72,15 +83,15 @@ def _handle_clash(s, ev):
 
 # ---------------- 2. missed sessions ----------------
 def check_missed():
+    if DEMO_MODE:
+        return  # rehearsal sessions must never trigger "you missed it" runs mid-demo
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(minutes=15)).isoformat()
     recent = (now - timedelta(hours=6)).isoformat()  # ignore old history, only fresh misses
     for s in db.query("SELECT * FROM sessions WHERE done=0 AND end<? AND end>? ORDER BY end",
                       (cutoff, recent)):
-        key = f"missed:{s['event_id']}"
-        if db.kv_get(key):
+        if not _claim(f"missed:{s['event_id']}"):
             continue
-        db.kv_set(key, True)
         item = st.get_item(s["assessment_id"])
         if not item or not item["active"] or st.days_left(item["due"]) is None or st.days_left(item["due"]) < 0.1:
             continue

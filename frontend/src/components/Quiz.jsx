@@ -2,19 +2,22 @@ import { useState } from 'react'
 import { Lightbulb } from 'lucide-react'
 
 // In-app MCQ quiz. Calls onFinish(score 0..1) when submitted.
-export default function Quiz({ questions = [], onFinish, onNewQuestions, title = 'Practice quiz' }) {
+export default function Quiz({ questions: qs, onFinish, onNewQuestions, title = 'Practice quiz' }) {
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [loadingNew, setLoadingNew] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+  const questions = (qs || []).filter((q) => q && Array.isArray(q.options) && q.options.length)
   if (!questions.length) return <p className="text-slate-500">No questions yet.</p>
 
   const correct = questions.filter((q, i) => answers[i] === q.correct_index).length
   const submit = () => {
     setSubmitted(true)
     const wrong = questions.filter((q, i) => answers[i] !== q.correct_index).map((q) => q.question)
-    onFinish?.(correct / questions.length, wrong)
+    setSaveError(false)
+    Promise.resolve(onFinish?.(correct / questions.length, wrong)).catch(() => setSaveError(true))
   }
-  const reset = () => { setAnswers({}); setSubmitted(false) }
+  const reset = () => { setAnswers({}); setSubmitted(false); setSaveError(false) }
   const fresh = async () => {
     setLoadingNew(true)
     try { await onNewQuestions(); reset() } finally { setLoadingNew(false) }
@@ -56,7 +59,8 @@ export default function Quiz({ questions = [], onFinish, onNewQuestions, title =
         <div className={`card flex items-center gap-4 flex-wrap ${correct / questions.length >= 0.6 ? '!bg-emerald-50 !border-emerald-300' : '!bg-red-50 !border-red-300'}`}>
           <span className="text-2xl font-extrabold tabular">{correct}/{questions.length}</span>
           <span className="text-base flex-1 min-w-[14rem]">
-            {correct / questions.length >= 0.6
+            {saveError ? "Your score couldn't be saved (connection problem). Try submitting again in a moment."
+              : correct / questions.length >= 0.6
               ? 'Score saved. Your readiness is updated.'
               : 'Not good enough yet. The agent is booking extra time on what you missed.'}
           </span>

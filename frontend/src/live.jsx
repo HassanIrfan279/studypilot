@@ -15,6 +15,7 @@ export function LiveProvider({ children }) {
   const [runs, setRuns] = useState([])
   const navigate = useNavigate()
   const navRef = useRef(navigate)
+  const toastTimer = useRef(null)
   navRef.current = navigate
 
   useEffect(() => {
@@ -29,7 +30,8 @@ export function LiveProvider({ children }) {
         if (!closed) retry = setTimeout(connect, 2000)
       }
       ws.onmessage = (e) => {
-        const msg = JSON.parse(e.data)
+        let msg
+        try { msg = JSON.parse(e.data) } catch { return }
         if (msg.type === 'log') setLogs((l) => [...l.slice(-199), msg.entry])
         if (msg.type === 'refresh') setTick((t) => t + 1)
         if (msg.type === 'run') {
@@ -46,7 +48,8 @@ export function LiveProvider({ children }) {
         if (msg.type === 'navigate') navRef.current(msg.to)
         if (msg.type === 'announce') {
           setToast(msg.text)
-          setTimeout(() => setToast(null), 12000)
+          clearTimeout(toastTimer.current)  // a newer announcement gets its full 12 s
+          toastTimer.current = setTimeout(() => setToast(null), 12000)
           announce(msg.text)
           setTick((t) => t + 1)
         }

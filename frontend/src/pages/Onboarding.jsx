@@ -72,6 +72,8 @@ export default function Onboarding() {
       const turn = await api.post('/api/interview', { messages: history })
       setMsgs([...history, { role: 'agent', text: turn.message }])
       if (turn.done && turn.profile) setProfile(turn.profile)
+    } catch {
+      setMsgs([...history, { role: 'agent', text: "Sorry, I couldn't reach the server just now. Type your answer again in a moment." }])
     } finally { setBusy(false) }
   }
   useEffect(() => { ask([]) }, [])

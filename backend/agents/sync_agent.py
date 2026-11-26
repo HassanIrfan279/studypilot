@@ -79,6 +79,8 @@ def _fetch_course(c):
                 db.kv_set(f"cancel_reason:{prev['id']}", d.get("evidence", ""))
             continue
         item_id = prev["id"] if prev else f"ann-{c['id']}-{_slug(d['title'])}"
+        if item_id in seen:
+            continue  # Gemini listed the same deadline twice
         if not prev:
             new_titles.append(d["title"])
         items.append({"id": item_id, "course_id": c["id"], "title": prev["title"] if prev else d["title"],

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { BookOpenCheck, CalendarDays, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
+import { BookOpenCheck, CalendarDays, Plane, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
 import { api, loginUrl } from './api'
 import { LiveProvider, useLive } from './live'
 import ActivityLog from './components/ActivityLog'
@@ -15,6 +15,8 @@ import Panic from './pages/Panic'
 import CalendarPage from './pages/CalendarPage'
 import Onboarding from './pages/Onboarding'
 import Notes from './pages/Notes'
+import Preflight from './pages/Preflight'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function Logo({ className = '' }) {
   return (
@@ -83,7 +85,7 @@ function Shell({ me }) {
   const location = useLocation()
   const nav =({ isActive }) =>
     `inline-flex items-center gap-2 px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition ${isActive ? 'bg-white text-brand' : 'text-indigo-100 hover:bg-white/10'}`
-  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding' || location.pathname.startsWith('/notes')
+  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding' || location.pathname.startsWith('/notes') || location.pathname === '/preflight'
 
   const syncNow = async () => {
     setSyncing(true)
@@ -100,6 +102,7 @@ function Shell({ me }) {
             <NavLink to="/calendar" className={nav}><CalendarDays size={19} />Calendar</NavLink>
             <NavLink to="/plan" className={nav}><ListChecks size={19} />Study plan</NavLink>
             <NavLink to="/onboarding" className={nav}><UserRound size={19} />About me</NavLink>
+            <NavLink to="/preflight" className={nav} title="Pre-flight check before the demo"><Plane size={19} />Check</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <span className={`hidden 2xl:flex text-sm font-semibold items-center gap-2 whitespace-nowrap ${connected ? 'text-emerald-200' : 'text-amber-200'}`}>
@@ -135,6 +138,7 @@ function Shell({ me }) {
       )}
       <div className={`max-w-[1680px] mx-auto px-6 py-7 grid grid-cols-1 gap-7 ${wide ? '' : 'xl:grid-cols-[minmax(0,1fr)_440px]'}`}>
         <main className="min-w-0">
+          <ErrorBoundary key={location.pathname} label="This page">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/course/:id" element={<Course />} />
@@ -145,7 +149,9 @@ function Shell({ me }) {
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/notes/:id" element={<Notes />} />
+            <Route path="/preflight" element={<Preflight />} />
           </Routes>
+          </ErrorBoundary>
         </main>
         <aside className={wide ? 'grid lg:grid-cols-2 gap-6' : 'space-y-6 xl:sticky xl:top-[92px] xl:self-start'}>
           <ActivityLog />

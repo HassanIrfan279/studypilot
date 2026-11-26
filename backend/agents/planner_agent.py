@@ -122,7 +122,11 @@ def replan(assessment_id, reason=""):
         log("Planner", f"Removed {len(events)} old session(s) for '{item['title']}'.")
     if not (item and item["active"]):
         return {"ok": True, "sessions": 0}
-    res = create_study_plan(assessment_id, reason)
+    try:
+        res = create_study_plan(assessment_id, reason)
+    except Exception as e:
+        log("Planner", f"Planning failed ({type(e).__name__}); restoring the previous sessions.", "warn")
+        res = {"ok": False}
     if not res.get("ok") and old:
         # Safety net: never leave the student with fewer sessions than before.
         due = datetime.fromisoformat(item["due"]) if item.get("due") else None

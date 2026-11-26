@@ -51,7 +51,10 @@ export default function DeadlineCard({ item, onChange }) {
             <ul className="list-disc pl-6 mt-1 text-red-950">{item.flags.map((f, i) => <li key={i}>{f}</li>)}</ul>
             <div className="flex gap-2 mt-2.5">
               <button className="btn-ghost !py-1 !bg-white" disabled={auditing}
-                onClick={async () => { await api.post(`/api/items/${item.id}/flags/clear`); onChange?.() }}>
+                onClick={async () => {
+                  setAuditing(true)
+                  try { await api.post(`/api/items/${item.id}/flags/clear`); onChange?.() } catch { /* stays flagged; try again */ } finally { setAuditing(false) }
+                }}>
                 <Check size={16} /> It's correct
               </button>
               <button className="btn-ghost !py-1 !bg-white" disabled={auditing}

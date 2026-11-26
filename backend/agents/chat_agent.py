@@ -36,6 +36,9 @@ try:
                        instruction=SYSTEM_INSTRUCTION, tools=TOOLS)
     runner = Runner(app_name=APP, agent=root_agent, session_service=InMemorySessionService(),
                     auto_create_session=True)
+    from google.adk.agents.run_config import RunConfig, ToolThreadPoolConfig
+    # Run our (blocking) Google/Gemini tools in threads so a chat request never freezes the server
+    RUN_CONFIG = RunConfig(tool_thread_pool_config=ToolThreadPoolConfig(max_workers=4))
     ADK_OK = True
 except Exception as e:  # pragma: no cover
     print("ADK unavailable, using plain Gemini:", e)
@@ -48,7 +51,7 @@ async def chat(message: str, session_id: str = "default") -> str:
             content = types.Content(role="user", parts=[types.Part(text=message)])
             reply = ""
             async for event in runner.run_async(user_id=USER, session_id=session_id,
-                                                new_message=content):
+                                                new_message=content, run_config=RUN_CONFIG):
                 if event.content and event.content.parts and event.is_final_response():
                     reply = "".join(p.text or "" for p in event.content.parts)
             return reply or "Done."

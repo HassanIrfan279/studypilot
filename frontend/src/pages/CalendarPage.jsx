@@ -110,7 +110,7 @@ export default function CalendarPage() {
             <h2 className="text-xl font-bold flex items-center gap-2"><CalendarPlus size={22} /> Add to your calendar</h2>
             <p className="text-slate-600 mt-1 tabular">{draft.label}</p>
             <input autoFocus value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && create()}
+              onKeyDown={(e) => e.key === 'Enter' && !busy && create()}
               placeholder="e.g. Cricket match, Family dinner, Gym"
               className="w-full mt-4 border border-slate-300 rounded-xl px-3.5 py-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <div className="flex gap-2 justify-end mt-5">

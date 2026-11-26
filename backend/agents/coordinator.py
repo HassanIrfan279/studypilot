@@ -125,7 +125,8 @@ def handle(result):
         log("Coordinator", f"First sync: {result['courses']} courses, {result['materials']} files. "
                            "Plan: Tutor reads the lectures that matter now → Planner books study time.")
         refresh()
-        warm_up()
+        import threading
+        threading.Thread(target=_safe_warm_up, daemon=True).start()  # don't block polling
         return
 
     if not changes:
@@ -175,7 +176,25 @@ def handle(result):
     _rule_based(changes)
 
 
+def _safe_warm_up():
+    try:
+        warm_up()
+    except Exception as e:
+        log("Coordinator", f"Warm-up stopped early: {e}", "warn")
+
+
 def _rule_based(changes):
+    """Backup plan; each change is handled on its own so one failure can't lose the others."""
+    for c in changes:
+        try:
+            _rule_based_one([c])
+        except Exception as e:
+            title = (c.get("item") or c.get("material") or {}).get("title", "a change")
+            log("Coordinator", f"Couldn't fully handle '{title}' ({type(e).__name__}); "
+                               "it stays on your dashboard.", "warn")
+
+
+def _rule_based_one(changes):
     """Backup plan: fixed pipeline used only if Gemini is unavailable."""
     spoken = []
     # 1) New lectures first — plans and prep packs depend on them
@@ -204,7 +223,7 @@ def _rule_based(changes):
             st.build_prep_pack(it["id"], refresh=True)
         except Exception as e:
             log("Tutor", f"Prep pack failed: {e}", "warn")
-        res = planner.create_study_plan(it["id"])
+        res = planner.replan(it["id"], reason="new deadline")  # replan = never double-books
         msg = f"New {it['kind']} in {course}: {it['title']}, due {_when(it['due'])}."
         if res.get("ok"):
             msg += f" I've booked {res['sessions']} study sessions and made your prep pack."

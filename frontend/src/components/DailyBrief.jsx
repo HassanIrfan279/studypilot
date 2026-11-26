@@ -5,7 +5,7 @@ import { announce } from '../voice'
 
 // Gemini writes the brief as "Due soon / What changed / Study today" sections; render them as columns.
 function parse(text) {
-  const clean = text.replace(/\*\*/g, '').replace(/^#+\s*/gm, '').replace(/\p{Extended_Pictographic}️?\s*/gu, '')
+  const clean = (text || '').replace(/\*\*/g, '').replace(/^#+\s*/gm, '').replace(/\p{Extended_Pictographic}️?\s*/gu, '')
   const heads = ['Due soon', 'What changed', 'Study today']
   const sections = []
   let current = null
@@ -35,7 +35,7 @@ export default function DailyBrief({ tick }) {
   }
   useEffect(() => load(), [tick])
 
-  const sections = brief ? parse(brief.text) : null
+  const sections = brief?.text ? parse(brief.text) : null
   return (
     <section className="rounded-2xl bg-indigo-950 text-white p-6 shadow-lg">
       <div className="flex items-center gap-3 mb-4">

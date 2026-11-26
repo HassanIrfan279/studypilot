@@ -11,8 +11,9 @@ export default function Course() {
   const { id } = useParams()
   const { tick } = useLive()
   const [data, setData] = useState(null)
-  useEffect(() => { api.get(`/api/courses/${id}`).then(setData) }, [id, tick])
-  if (!data) return <p className="text-base text-slate-600">Loading course…</p>
+  const [error, setError] = useState(null)
+  useEffect(() => { api.get(`/api/courses/${id}`).then((d) => { setData(d); setError(null) }).catch((e) => setError(e.message)) }, [id, tick])
+  if (!data) return <p className="text-base text-slate-600">{error ? `Couldn't load this course (${error}). It will retry on the next sync.` : 'Loading course…'}</p>
 
   return (
     <div className="space-y-7">

@@ -14,15 +14,16 @@ export default function Plan() {
   const [busy, setBusy] = useState(null)
   const [checking, setChecking] = useState(null)
 
-  const load = () => api.get('/api/plan').then(setData)
+  const [error, setError] = useState(null)
+  const load = () => api.get('/api/plan').then((d) => { setData(d); setError(null) }).catch((e) => setError(e.message))
   useEffect(() => { load() }, [tick])
 
   const act = async (key, fn) => {
     setBusy(key)
-    try { await fn(); await load() } finally { setBusy(null) }
+    try { await fn(); await load() } catch (e) { setError(e.message) } finally { setBusy(null) }
   }
 
-  if (!data) return <p className="text-base text-slate-600">Loading your plan…</p>
+  if (!data) return <p className="text-base text-slate-600">{error ? `Couldn't load your plan (${error}). It will retry on the next sync.` : 'Loading your plan…'}</p>
 
   const byDay = {}
   data.sessions.filter((s) => !s.past || s.done).forEach((s) => {
@@ -74,7 +75,7 @@ export default function Plan() {
                 <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: s.color }} />
                 <span className="font-bold text-base tabular w-36 shrink-0">{time(s.start)}–{time(s.end)}</span>
                 <Link to={`/prep/${s.assessment_id}`} className="flex-1 min-w-0 font-medium hover:underline underline-offset-4">
-                  {s.title.replace(/^📘\s*/, '')}
+                  {(s.title || 'Study session').replace(/^📘\s*/, '')}
                 </Link>
                 {s.done ? (
                   <span className="text-emerald-700 font-bold flex items-center gap-1.5"><Check size={18} /> Done</span>

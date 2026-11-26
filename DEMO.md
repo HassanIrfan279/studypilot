@@ -1,19 +1,25 @@
 # 🎤 StudyPilot demo runbook (3 minutes)
 
+## The day before
+
+- **Sign in again.** Google expires sign-ins for testing-mode apps after 7 days. The **Check** page shows the exact expiry time. Sign out and in again the day before, so it can't expire on stage.
+- Do one full rehearsal. Rehearsal study sessions can't trigger "you missed it" runs while `DEMO_MODE=true`.
+
 ## 30 minutes before
 
 1. **Use your phone hotspot.** If you plan to use venue Wi-Fi, test it first.
 2. Start everything from the `studypilot` folder: `.\start.ps1`
-3. Check that http://localhost:8000/health shows `{"status":"ok"}`.
-4. **Pre-warm** so nothing is slow on stage. Gemini reads every lecture and builds the prep packs now:
-   `Invoke-WebRequest -Method POST http://localhost:8000/api/warmup`
-   Wait for "✅ All set" in the activity log.
-5. Open **Google Calendar** in a second browser tab, on week view.
-6. Sign in to the **teacher** Classroom account on the second screen. Have these ready **as drafts** (don't post them yet):
+3. Open StudyPilot and go to **Check** (top bar), the pre-flight page:
+   - Click **Warm up** and wait for "✅ All set" in the agent log (a few minutes). It pre-builds every prep pack and the notes, so nothing is slow on stage.
+   - Click **Run checks** until it says **"All systems go"**. Each red row tells you its fix.
+   - Click **Send test alert** and check that your phone buzzes.
+4. Open **Google Calendar** in a second browser tab, on week view.
+5. Sign in to the **teacher** Classroom account on the second screen. Have these ready **as drafts** (don't post them yet):
    - A new announcement: *"Quiz on Chapter 2 this Friday in class."*
    - Later: *"The Chapter 2 quiz is postponed to next Wednesday."*
-7. Click **🎙 Talk to StudyPilot** once to allow the microphone, then stop it.
-8. `DEMO_MODE=true` in `backend/.env` means StudyPilot checks Classroom every **10 s**.
+6. **Click once anywhere on the StudyPilot page.** Browsers only allow spoken announcements after a click. Also click **🎙 Talk** once to allow the microphone, then stop it.
+7. Phone: open Discord on the StudyPilot channel, sound on.
+8. **Run the stage demo from your laptop** (`localhost`). That is the most reliable setup. Give judges the deployed link separately.
 
 ## On stage
 
@@ -40,10 +46,11 @@ Urdu works too. Say *"Mujhe Prim's algorithm samjhao"*, or click **اردو می
 
 ## If something goes wrong
 
-- **Voice doesn't answer:** use the text chat box. It has the same agent and the same tools.
+- **Voice doesn't answer:** after 30 s the button says so on its own. Use the text chat box: same agent, same tools.
 - **Gemini is slow or busy:** it automatically switches to a backup model. Lectures and prep packs are already cached from the warm-up.
 - **Wi-Fi drops:** the app keeps showing the last synced data. Switch to your hotspot.
-- **Backend window closed:** run `.\start.ps1` again.
+- **Backend window closed:** run `.\start.ps1` again. Then open **Check** to confirm everything is green.
+- **Gemini answers slowly:** each agent run is capped at 90 s, and every Gemini call at about 100 s across backup models. The app shows what it finished and never hangs.
 - **Last resort:** play the backup demo video.
 
 ## Judge questions

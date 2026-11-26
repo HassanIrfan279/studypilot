@@ -17,6 +17,7 @@ import auth
 import db
 import scheduler
 from activity_log import log
+import preflight
 import runs
 from agents import chat_agent, coordinator, interview, planner_agent, voice_agent, watcher
 from tools import audit_tools as audit
@@ -247,6 +248,12 @@ async def quiz_result(assessment_id: str, body: ScoreIn):
     if body.score < 0.6:  # weak result -> the agent reacts on its own
         asyncio.create_task(run(watcher.on_quiz_result, assessment_id, body.score, body.wrong))
     return st.readiness(assessment_id)
+
+
+@app.get("/api/preflight")
+async def preflight_check():
+    """Tests every service the demo needs (read-only) — run this before going on stage."""
+    return await run(preflight.run_all)
 
 
 @app.get("/api/runs")
