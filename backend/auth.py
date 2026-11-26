@@ -31,8 +31,13 @@ def handle_callback(full_url: str, state: str):
     granted = token.get("scope", [])
     if isinstance(granted, str):
         granted = granted.split()
+    # Google reports some scopes under an older alias name; treat them as the same permission
+    aliases = {"classroom.coursework.me.readonly": "classroom.student-submissions.me.readonly"}
+    short = {g.split("/")[-1] for g in granted}
     missing = [s for s in SCOPES if s.startswith("https://www.googleapis.com/auth/")
-               and "userinfo" not in s and s not in granted]
+               and "userinfo" not in s
+               and s.split("/")[-1] not in short
+               and aliases.get(s.split("/")[-1]) not in short]
     _save(flow.credentials)
     db.kv_set("missing_scopes", [m.split("/")[-1] for m in missing])
     return missing
