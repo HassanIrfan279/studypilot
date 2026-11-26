@@ -32,6 +32,12 @@ DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 SYNC_INTERVAL_SECONDS = 10 if DEMO_MODE else int(os.getenv("SYNC_INTERVAL_SECONDS", "30"))
 DB_PATH = str(BASE_DIR / "studypilot.db")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+# WhatsApp alerts via Meta's official WhatsApp Cloud API (free test number)
+WA_TOKEN = os.getenv("WA_TOKEN", "")
+WA_PHONE_NUMBER_ID = os.getenv("WA_PHONE_NUMBER_ID", "")
+WA_TO = os.getenv("WA_TO", "")  # the student's WhatsApp number, e.g. +923001234567
+# Phone push notifications via the free ntfy app (pick a long random topic name)
+NTFY_TOPIC = os.getenv("NTFY_TOPIC", "")
 # WhatsApp alerts via CallMeBot (free): the student's number + the key CallMeBot sends them
 CALLMEBOT_PHONE = os.getenv("CALLMEBOT_PHONE", "")
 CALLMEBOT_APIKEY = os.getenv("CALLMEBOT_APIKEY", "")
