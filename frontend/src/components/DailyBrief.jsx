@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react'
+import { RotateCw, Sun, Volume2 } from 'lucide-react'
 import { api } from '../api'
 import { announce } from '../voice'
+
+// Gemini writes the brief as "Due soon / What changed / Study today" sections; render them as columns.
+function parse(text) {
+  const clean = text.replace(/\*\*/g, '').replace(/^#+\s*/gm, '').replace(/\p{Extended_Pictographic}️?\s*/gu, '')
+  const heads = ['Due soon', 'What changed', 'Study today']
+  const sections = []
+  let current = null
+  for (const raw of clean.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    const head = heads.find((h) => line.toLowerCase().replace(/[:：]$/, '').startsWith(h.toLowerCase()))
+    if (head) {
+      current = { head, lines: [] }
+      sections.push(current)
+      const rest = line.slice(head.length).replace(/^[:：\s-]+/, '')
+      if (rest) current.lines.push(rest)
+    } else if (current) {
+      current.lines.push(line.replace(/^[-•*]\s*/, ''))
+    }
+  }
+  return sections.length ? sections : null
+}
 
 export default function DailyBrief({ tick }) {
   const [brief, setBrief] = useState(null)
@@ -12,22 +35,35 @@ export default function DailyBrief({ tick }) {
   }
   useEffect(() => load(), [tick])
 
+  const sections = brief ? parse(brief.text) : null
   return (
-    <div className="card bg-gradient-to-br from-indigo-700 to-indigo-900 !border-0 text-white">
-      <div className="flex items-center gap-3 mb-2">
-        <h2 className="text-xl font-extrabold">☀️ Your daily brief</h2>
+    <section className="rounded-2xl bg-indigo-950 text-white p-6 shadow-lg">
+      <div className="flex items-center gap-3 mb-4">
+        <Sun size={24} className="text-amber-300" />
+        <h2 className="text-2xl font-extrabold">Your daily brief</h2>
         <div className="ml-auto flex gap-2">
           {brief && (
-            <button className="btn-ghost !bg-white/15 !text-white !py-1" onClick={() => announce(brief.text.replace(/[*#]/g, ''))}>🔊 Read</button>
+            <button className="btn-on-dark !py-1.5" onClick={() => announce(brief.text.replace(/[*#-]/g, ''))}>
+              <Volume2 size={18} /> Read aloud
+            </button>
           )}
-          <button className="btn-ghost !bg-white/15 !text-white !py-1" onClick={() => load(true)} disabled={loading}>
-            {loading ? '…' : '↻'}
+          <button className="btn-on-dark !py-1.5 !px-2.5" onClick={() => load(true)} disabled={loading} aria-label="Refresh brief">
+            <RotateCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
-      <p className="whitespace-pre-wrap text-[17px] leading-relaxed text-indigo-50">
-        {brief ? brief.text.replace(/\*\*/g, '') : loading ? 'Gemini is writing your brief…' : 'Sync to get your brief.'}
-      </p>
-    </div>
+      {!brief && <p className="text-lg text-indigo-200">{loading ? 'Gemini is writing your brief…' : 'Sync to get your brief.'}</p>}
+      {brief && sections && (
+        <div className="grid md:grid-cols-3 gap-5">
+          {sections.map((s) => (
+            <div key={s.head}>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-amber-200 mb-1.5">{s.head}</h3>
+              {s.lines.map((l, i) => <p key={i} className="text-[17px] leading-relaxed text-white">{l}</p>)}
+            </div>
+          ))}
+        </div>
+      )}
+      {brief && !sections && <p className="whitespace-pre-wrap text-lg leading-relaxed">{brief.text.replace(/\*\*/g, '')}</p>}
+    </section>
   )
 }

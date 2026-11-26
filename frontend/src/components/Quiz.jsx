@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Lightbulb } from 'lucide-react'
 
 // In-app MCQ quiz. Calls onFinish(score 0..1) when submitted.
 export default function Quiz({ questions = [], onFinish, title = 'Practice quiz' }) {
@@ -33,7 +34,11 @@ export default function Quiz({ questions = [], onFinish, title = 'Practice quiz'
               )
             })}
           </div>
-          {submitted && <p className="mt-3 text-slate-700">💡 {q.explanation}</p>}
+          {submitted && (
+            <p className="mt-3 text-slate-800 flex gap-2 items-start">
+              <Lightbulb size={19} className="text-amber-600 shrink-0 mt-0.5" /> {q.explanation}
+            </p>
+          )}
         </div>
       ))}
       {!submitted ? (

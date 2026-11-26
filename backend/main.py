@@ -153,6 +153,7 @@ async def prep(assessment_id: str, refresh: bool = False):
     pack = await run(st.build_prep_pack, assessment_id, refresh)
     if pack:
         pack["readiness"] = st.readiness(assessment_id)
+        pack["color"] = cal.COLOR_HEX[cal.course_color(pack["assessment"]["course_id"])]
     return pack
 
 
@@ -185,6 +186,7 @@ async def plan():
     priorities = await run(planner_agent.prioritize)
     return {"sessions": sessions,
             "priorities": [{"id": p["id"], "title": p["title"], "course_name": p["course_name"],
+                            "color": colors.get(p["course_id"], "#3f51b5"),
                             "priority": p["priority"], "due": p["due"]} for p in priorities]}
 
 
