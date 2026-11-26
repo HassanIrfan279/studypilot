@@ -6,6 +6,7 @@
                                                            focused session on your mistakes.
 Each of these starts a Gemini agent run, with a rule-based backup.
 """
+import threading
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -111,11 +112,16 @@ def on_quiz_result(item_id, score, wrong_topics):
     if not item:
         return
     topics = ", ".join(wrong_topics[:4]) or "the topics you got wrong"
+    # The notes always change after a weak attempt (in parallel with the re-plan)
+    from tools import notes_tools as notes
+    threading.Thread(target=notes.revise_for_weak, args=(item_id, wrong_topics), daemon=True).start()
     situation = (f"The student just scored {round(score * 100)}% on the practice quiz for "
                  f"item_id={item_id} '{item['title']}' (due {item['due']}). They got these wrong: "
                  f"{topics}. Act like a strict teacher: book ONE extra focused session on exactly those "
                  "topics before the deadline, verify it in the calendar, and tell the student what to "
-                 "fix and that the next quiz attempt will have new questions.")
+                 "fix and that the next quiz attempt will have new questions. (Their study notes are already "
+                 "being rewritten around these mistakes automatically — don't call rewrite_study_notes; "
+                 "do mention the updated notes.)")
     if AGENT_BRAIN and brain.think_and_act("quiz", f"Weak quiz ({round(score * 100)}%): {item['title']}", situation):
         return
     due = datetime.fromisoformat(item["due"]).astimezone(TZ)

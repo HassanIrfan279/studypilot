@@ -225,10 +225,23 @@ def flag_issue(item_id: str, issue: str) -> dict:
     return {"flagged": True}
 
 
+def rewrite_study_notes(item_id: str, instruction: str) -> dict:
+    """Rewrite the student's study notes for a deadline (e.g. re-teach the topics they got wrong
+    more simply with new worked examples). Creates the notes first if they don't exist yet."""
+    from tools import notes_tools as notes
+    try:
+        if not notes.get_notes(item_id):
+            notes.generate_notes(item_id)
+        n = notes.edit_notes(item_id, instruction, reason="Rewritten by the agent")
+        return {"ok": True, "version": n["version"]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 TOOLS = [get_deadline, list_upcoming, get_student_profile, analyze_lecture, build_prep_pack, plan_sessions,
          clear_sessions, add_extra_session, move_session, find_free_slot, sessions_between,
          verify_calendar,
-         notify_student, ask_student, flag_issue]
+         rewrite_study_notes, notify_student, ask_student, flag_issue]
 TOOL_MAP = {f.__name__: f for f in TOOLS}
 
 SYSTEM = """You are the Coordinator of StudyPilot, a strict but caring study agent for a

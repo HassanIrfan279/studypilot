@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 import activity_log
@@ -23,6 +23,7 @@ from config import FRONTEND_URL, TIMEZONE
 from google_clients import NotLoggedIn
 from tools import calendar_tools as cal
 from tools import study_tools as st
+from tools import notes_tools as notes
 
 
 @asynccontextmanager
@@ -166,6 +167,70 @@ async def prep(assessment_id: str, refresh: bool = False):
         pack["readiness"] = st.readiness(assessment_id)
         pack["color"] = cal.COLOR_HEX[cal.course_color(pack["assessment"]["course_id"])]
     return pack
+
+
+# ---------- study notes (editable, AI-editable, PDF, mirrored to Drive) ----------
+class NotesIn(BaseModel):
+    md: str = ""
+    instruction: str = ""
+
+
+def _notes_out(n):
+    if n:
+        n = {k: v for k, v in n.items() if k != "history"}
+    return n
+
+
+@app.get("/api/notes/{assessment_id}")
+async def get_notes(assessment_id: str, generate: bool = False, refresh: bool = False):
+    n = notes.get_notes(assessment_id)
+    if (generate and not n) or refresh:
+        try:
+            n = await run(notes.generate_notes, assessment_id, refresh)
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+    item = st.get_item(assessment_id)
+    return {"notes": _notes_out(n), "item": item,
+            "course_name": item and st.course_name(item["course_id"]),
+            "color": item and cal.COLOR_HEX[cal.course_color(item["course_id"])]}
+
+
+@app.put("/api/notes/{assessment_id}")
+async def save_notes(assessment_id: str, body: NotesIn):
+    return _notes_out(await run(notes.save_manual, assessment_id, body.md))
+
+
+@app.post("/api/notes/{assessment_id}/ai-edit")
+async def ai_edit_notes(assessment_id: str, body: NotesIn):
+    try:
+        return _notes_out(await run(notes.edit_notes, assessment_id, body.instruction))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/api/notes/{assessment_id}/undo")
+async def undo_notes(assessment_id: str):
+    return _notes_out(await run(notes.undo, assessment_id))
+
+
+@app.get("/api/notes/{assessment_id}/pdf")
+async def notes_pdf(assessment_id: str):
+    try:
+        data = await run(notes.notes_pdf, assessment_id)
+    except Exception as e:
+        return JSONResponse({"error": f"Drive export failed: {e}"}, status_code=502)
+    if not data:
+        return JSONResponse({"error": "No notes yet"}, status_code=404)
+    item = st.get_item(assessment_id) or {"title": "notes"}
+    name = "".join(ch if ch.isalnum() or ch in " -_" else "_" for ch in item["title"]).strip()
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name} - StudyPilot notes.pdf"'})
+
+
+@app.post("/api/drive/organize")
+async def organize_drive():
+    await run(notes.organize_drive, [i for i in st.upcoming_items(14) if i["due"]])
+    return {"ok": True, "folder": db.kv_get("folder:root:StudyPilot")}
 
 
 class ScoreIn(BaseModel):

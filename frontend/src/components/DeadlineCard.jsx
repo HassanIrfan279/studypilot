@@ -37,6 +37,12 @@ export default function DeadlineCard({ item, onChange }) {
               <Search size={15} /> Found in announcement
             </span>
           )}
+          {item.source === 'email' && (
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-sky-900 bg-sky-100 px-2 py-1 rounded-md"
+              title={item.description || 'Found by Gemini in a class email'}>
+              <Search size={15} /> Found in email
+            </span>
+          )}
         </div>
 
         {item.flags?.length > 0 && (

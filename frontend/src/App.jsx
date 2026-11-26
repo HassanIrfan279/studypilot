@@ -14,6 +14,7 @@ import Plan from './pages/Plan'
 import Panic from './pages/Panic'
 import CalendarPage from './pages/CalendarPage'
 import Onboarding from './pages/Onboarding'
+import Notes from './pages/Notes'
 
 function Logo({ className = '' }) {
   return (
@@ -82,7 +83,7 @@ function Shell({ me }) {
   const location = useLocation()
   const nav =({ isActive }) =>
     `inline-flex items-center gap-2 px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition ${isActive ? 'bg-white text-brand' : 'text-indigo-100 hover:bg-white/10'}`
-  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding'
+  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding' || location.pathname.startsWith('/notes')
 
   const syncNow = async () => {
     setSyncing(true)
@@ -143,6 +144,7 @@ function Shell({ me }) {
             <Route path="/panic/:id" element={<Panic />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/notes/:id" element={<Notes />} />
           </Routes>
         </main>
         <aside className={wide ? 'grid lg:grid-cols-2 gap-6' : 'space-y-6 xl:sticky xl:top-[92px] xl:self-start'}>

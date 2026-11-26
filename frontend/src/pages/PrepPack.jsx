@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, FileText, Loader2, PlayCircle, RotateCw, Siren, Target } from 'lucide-react'
+import { AlertTriangle, ArrowRight, FileText, Loader2, NotebookPen, PlayCircle, RotateCw, Siren, Target } from 'lucide-react'
 import { api, fmtDate } from '../api'
 import CourseTag from '../components/CourseTag'
 import Quiz from '../components/Quiz'
@@ -46,6 +46,7 @@ export default function PrepPack() {
             <span className="text-slate-700 tabular">Due {fmtDate(a.due)}</span>
           </div>
           <div className="flex gap-2 mt-4">
+            <Link to={`/notes/${id}`} className="btn-primary"><NotebookPen size={18} /> Study notes</Link>
             <Link to={`/panic/${id}`} className="btn-danger"><Siren size={18} /> Panic mode</Link>
             <button className="btn-ghost" onClick={() => { setPack(null); load(true) }}><RotateCw size={17} /> Rebuild</button>
           </div>

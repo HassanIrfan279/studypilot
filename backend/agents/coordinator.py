@@ -61,8 +61,15 @@ def warm_up(max_files=8):
             st.build_prep_pack(it["id"])
         except Exception as e:
             log("Tutor", f"Prep pack for '{it['title']}' failed: {e}", "warn")
+    from tools import notes_tools as notes
+    for it in upcoming[:2]:  # detailed notes for the two nearest deadlines up front
+        try:
+            notes.generate_notes(it["id"])
+        except Exception as e:
+            log("Tutor", f"Notes for '{it['title']}' failed: {e}", "warn")
+    notes.organize_drive(upcoming)
     db.cache_delete("brief")
-    log("Coordinator", "✅ All set: lectures analyzed, study plan booked, prep packs ready.",
+    log("Coordinator", "✅ All set: lectures analyzed, study plan booked, prep packs and notes ready.",
         "success")
     refresh()
 

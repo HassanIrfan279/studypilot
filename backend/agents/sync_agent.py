@@ -8,6 +8,7 @@ import db
 from activity_log import log
 from config import TIMEZONE
 from tools import classroom_tools as cr
+from tools import gmail_tools as gm
 from tools import study_tools as st
 
 RECENT_DAYS = 21  # only announcements from the last 3 weeks can contain live deadlines
@@ -106,14 +107,76 @@ def _local(iso):
     return datetime.fromisoformat(iso).astimezone(ZoneInfo(TIMEZONE)).strftime("%a %Y-%m-%d %H:%M")
 
 
+def _email_items(courses):
+    """Deadlines a teacher only sent by email (Gmail, read-only). Never drops a tracked one on error."""
+    tracked_rows = db.query("SELECT * FROM items WHERE source='email' AND active=1")
+    keep = [{**r, "files": []} for r in tracked_rows]
+    if db.kv_get("gmail_disabled_until", 0) > datetime.now().timestamp():
+        return keep
+    by_name = {c["name"]: c for c in courses}
+    names = {c["id"]: c["name"] for c in courses}
+    try:
+        emails = gm.recent_class_emails()
+        found = gm.extract_email_deadlines(
+            list(by_name), emails,
+            [{"course": names.get(r["course_id"], ""), "title": r["title"], "kind": r["kind"],
+              "due": _local(r["due"])} for r in tracked_rows],
+            datetime.now(ZoneInfo(TIMEZONE)).strftime("%A %Y-%m-%d"),
+            [f"[{names.get(r['course_id'], '')}] {r['title']}" for r in db.query(
+                "SELECT course_id, title FROM items WHERE active=1 AND source!='email'")])
+    except Exception as e:
+        msg = str(e)
+        if "403" in msg or "has not been used" in msg or "disabled" in msg:
+            db.kv_set("gmail_disabled_until", datetime.now().timestamp() + 600)
+            log("Sync", "Gmail isn't reachable (is the Gmail API enabled in Google Cloud?). "
+                        "Retrying in 10 min.", "warn")
+        else:
+            log("Sync", f"Couldn't read class emails right now ({type(e).__name__}).", "warn")
+        return keep
+    tracked = {(r["course_id"], r["title"].lower()): r for r in tracked_rows}
+    items, seen, new_titles = [], set(), []
+    for d in found:
+        c = by_name.get(d["course"])
+        if not c:
+            continue
+        prev = tracked.get((c["id"], d["title"].lower()))
+        if d.get("status") == "cancelled":
+            if prev:
+                seen.add(prev["id"])
+                db.kv_set(f"cancel_reason:{prev['id']}", d.get("evidence", ""))
+            continue
+        item_id = prev["id"] if prev else f"mail-{c['id']}-{_slug(d['title'])}"
+        if item_id in seen:
+            continue
+        if not prev:
+            new_titles.append(f"{d['title']} ({c['name']})")
+        items.append({"id": item_id, "course_id": c["id"], "title": prev["title"] if prev else d["title"],
+                      "description": "📧 From email: " + (d.get("evidence") or ""),
+                      "kind": "quiz" if d["kind"] == "quiz" or cr.QUIZ_WORDS.search(d["title"])
+                      else "assignment",
+                      "due": _hidden_due(d), "update_time": "", "link": "https://mail.google.com/",
+                      "files": [], "source": "email"})
+        seen.add(item_id)
+    for r in tracked_rows:
+        if r["id"] not in seen:
+            items.append({**r, "files": []})
+    if new_titles:
+        log("Sync", f"📧 Gemini found {len(new_titles)} deadline(s) in your email: "
+                    f"{', '.join(new_titles)}.")
+    return items
+
+
 def fetch_all():
-    """Read everything from Classroom. Returns (courses, items, materials)."""
+    """Read everything from Classroom (+ class emails). Returns (courses, items, materials)."""
     courses = cr.list_courses()
     items, materials = [], []
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        mail = pool.submit(_email_items, courses)
         for its, mats in pool.map(_fetch_course, courses):
             items.extend(its)
             materials.extend(mats)
+        known = {i["id"] for i in items}
+        items.extend(i for i in mail.result() if i["id"] not in known)
     return courses, items, materials
 
 
