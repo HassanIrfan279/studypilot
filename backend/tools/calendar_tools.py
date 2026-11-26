@@ -26,6 +26,21 @@ def _hm(s):
     return dtime(int(h), int(m))
 
 
+def _study_window():
+    """Study window from the student's profile (wake +1h .. sleep -30min), else from .env."""
+    p = db.kv_get("profile") or {}
+    try:
+        wake = datetime.combine(datetime.now().date(), _hm(p["wake_time"])) + timedelta(hours=1)
+        sleep = datetime.combine(datetime.now().date(), _hm(p["sleep_time"])) - timedelta(minutes=30)
+        if p["sleep_time"] < "05:00":  # sleeps after midnight -> study until 23:30
+            sleep = datetime.combine(datetime.now().date(), dtime(23, 30))
+        if sleep > wake:
+            return wake.time(), sleep.time()
+    except (KeyError, ValueError, TypeError):
+        pass
+    return _hm(STUDY_WINDOW_START), _hm(STUDY_WINDOW_END)
+
+
 def get_free_slots(start: datetime, end: datetime):
     """Free time between start and end, only inside the daily study window. Returns [(s, e)]."""
     if end <= start:
@@ -40,11 +55,12 @@ def get_free_slots(start: datetime, end: datetime):
             for b in resp["calendars"]["primary"].get("busy", [])]
     busy.sort()
 
+    win_start, win_end = _study_window()
     free = []
     day = start.astimezone(TZ).date()
     while day <= end.astimezone(TZ).date():
-        w_start = datetime.combine(day, _hm(STUDY_WINDOW_START), TZ)
-        w_end = datetime.combine(day, _hm(STUDY_WINDOW_END), TZ)
+        w_start = datetime.combine(day, win_start, TZ)
+        w_end = datetime.combine(day, win_end, TZ)
         cur, stop = max(w_start, start.astimezone(TZ)), min(w_end, end.astimezone(TZ))
         for b_s, b_e in busy:
             if b_e <= cur or b_s >= stop:
@@ -171,6 +187,70 @@ def list_student_events(days=7):
                     "end": datetime.fromisoformat(e["end"]["dateTime"]).astimezone(TZ),
                     "updated": e.get("updated", "")})
     return out
+
+
+# ---------- in-app calendar (the student edits; changes go straight to Google Calendar) ----------
+def events_for_ui(start_iso, end_iso):
+    svc = g.calendar()
+    items = g.with_retry(lambda: svc.events().list(
+        calendarId="primary", timeMin=start_iso, timeMax=end_iso, singleEvents=True,
+        orderBy="startTime", maxResults=500).execute()).get("items", [])
+    done = {r["event_id"]: r["done"] for r in db.query("SELECT event_id, done FROM sessions")}
+    out = []
+    for e in items:
+        priv = e.get("extendedProperties", {}).get("private", {})
+        ours = priv.get("studypilot") == "true"
+        kind = priv.get("kind", "session") if ours else "mine"
+        all_day = "date" in e.get("start", {})
+        color = COLOR_HEX.get(e.get("colorId", ""), "#64748b" if kind == "mine" else "#3f51b5")
+        out.append({
+            "id": e["id"], "title": e.get("summary", "(busy)"), "kind": kind,
+            "start": e["start"].get("dateTime") or e["start"].get("date"),
+            "end": e["end"].get("dateTime") or e["end"].get("date"),
+            "allDay": all_day, "color": color, "assessment_id": priv.get("assessment_id"),
+            "recurring": bool(e.get("recurringEventId")),
+            "done": bool(done.get(e["id"])),
+            "editable": kind in ("session", "mine") and not all_day and not e.get("recurringEventId"),
+        })
+    return out
+
+
+def _parse_local(iso):
+    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return dt if dt.tzinfo else dt.replace(tzinfo=TZ)
+
+
+def add_student_event(title, start_iso, end_iso):
+    """The student's own event (not tagged as StudyPilot) — e.g. 'Cricket match'."""
+    svc = g.calendar()
+    body = {"summary": title or "Busy",
+            "start": {"dateTime": _parse_local(start_iso).isoformat(), "timeZone": TIMEZONE},
+            "end": {"dateTime": _parse_local(end_iso).isoformat(), "timeZone": TIMEZONE}}
+    ev = g.with_retry(lambda: svc.events().insert(calendarId="primary", body=body).execute())
+    return {"id": ev["id"]}
+
+
+def update_event_from_ui(event_id, start_iso, end_iso, title=""):
+    svc = g.calendar()
+    patch = {"start": {"dateTime": _parse_local(start_iso).isoformat(), "timeZone": TIMEZONE},
+             "end": {"dateTime": _parse_local(end_iso).isoformat(), "timeZone": TIMEZONE}}
+    if title:
+        patch["summary"] = title
+    g.with_retry(lambda: svc.events().patch(calendarId="primary", eventId=event_id, body=patch).execute())
+    db.execute("UPDATE sessions SET start=?, end=? WHERE event_id=?",
+               (_parse_local(start_iso).isoformat(), _parse_local(end_iso).isoformat(), event_id))
+    return {"ok": True}
+
+
+def delete_event_from_ui(event_id):
+    svc = g.calendar()
+    ev = g.with_retry(lambda: svc.events().get(calendarId="primary", eventId=event_id).execute())
+    kind = ev.get("extendedProperties", {}).get("private", {}).get("kind", "session")
+    if _is_ours(ev) and kind != "session":
+        raise PermissionError("Deadline markers and timetable blocks are managed by StudyPilot.")
+    g.with_retry(lambda: svc.events().delete(calendarId="primary", eventId=event_id).execute())
+    db.execute("DELETE FROM sessions WHERE event_id=?", (event_id,))
+    return {"ok": True}
 
 
 def find_free_slot(minutes, after: datetime, before: datetime, prefer_evening=True):

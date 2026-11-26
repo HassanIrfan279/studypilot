@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router-dom'
-import { BookOpenCheck, CalendarDays, LayoutDashboard, RefreshCw, ShieldCheck, Volume2, X } from 'lucide-react'
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { BookOpenCheck, CalendarDays, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
 import { api, loginUrl } from './api'
 import { LiveProvider, useLive } from './live'
 import ActivityLog from './components/ActivityLog'
@@ -12,6 +12,8 @@ import Lecture from './pages/Lecture'
 import PrepPack from './pages/PrepPack'
 import Plan from './pages/Plan'
 import Panic from './pages/Panic'
+import CalendarPage from './pages/CalendarPage'
+import Onboarding from './pages/Onboarding'
 
 function Logo({ className = '' }) {
   return (
@@ -77,8 +79,10 @@ function Toast() {
 function Shell({ me }) {
   const { connected } = useLive()
   const [syncing, setSyncing] = useState(false)
-  const nav = ({ isActive }) =>
-    `inline-flex items-center gap-2 px-3.5 py-2 rounded-xl font-semibold transition ${isActive ? 'bg-white text-brand' : 'text-indigo-100 hover:bg-white/10'}`
+  const location = useLocation()
+  const nav =({ isActive }) =>
+    `inline-flex items-center gap-2 px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition ${isActive ? 'bg-white text-brand' : 'text-indigo-100 hover:bg-white/10'}`
+  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding'
 
   const syncNow = async () => {
     setSyncing(true)
@@ -90,18 +94,20 @@ function Shell({ me }) {
       <header className="bg-brand text-white sticky top-0 z-40 shadow-md">
         <div className="max-w-[1680px] mx-auto px-6 h-[68px] flex items-center gap-4">
           <Link to="/"><Logo className="text-2xl" /></Link>
-          <nav className="flex gap-1 ml-6">
+          <nav className="flex gap-1 ml-4">
             <NavLink to="/" end className={nav}><LayoutDashboard size={19} />Dashboard</NavLink>
-            <NavLink to="/plan" className={nav}><CalendarDays size={19} />Study plan</NavLink>
+            <NavLink to="/calendar" className={nav}><CalendarDays size={19} />Calendar</NavLink>
+            <NavLink to="/plan" className={nav}><ListChecks size={19} />Study plan</NavLink>
+            <NavLink to="/onboarding" className={nav}><UserRound size={19} />About me</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">
-            <span className={`hidden lg:flex text-sm font-semibold items-center gap-2 ${connected ? 'text-emerald-200' : 'text-amber-200'}`}>
+            <span className={`hidden 2xl:flex text-sm font-semibold items-center gap-2 whitespace-nowrap ${connected ? 'text-emerald-200' : 'text-amber-200'}`}>
               <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
               {connected ? 'Agent live' : 'Reconnecting…'}
             </span>
             <button onClick={syncNow} disabled={syncing} className="btn-on-dark">
               <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? 'Syncing…' : 'Sync now'}
+              <span className="hidden xl:inline">{syncing ? 'Syncing…' : 'Sync now'}</span>
             </button>
             <VoiceButton />
           </div>
@@ -117,7 +123,16 @@ function Shell({ me }) {
           </div>
         </div>
       )}
-      <div className="max-w-[1680px] mx-auto px-6 py-7 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_440px] gap-7">
+      {!me?.needs_upgrade && !me?.profile_done && location.pathname !== '/onboarding' && (
+        <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-950">
+          <div className="max-w-[1680px] mx-auto px-6 py-2.5 flex items-center gap-3 flex-wrap">
+            <UserRound size={20} />
+            <span className="font-semibold">I plan better when I know you. Take the 3-minute interview: goals, timetable, and what gets in the way.</span>
+            <Link to="/onboarding" className="btn-primary !py-1.5 ml-auto">Start interview</Link>
+          </div>
+        </div>
+      )}
+      <div className={`max-w-[1680px] mx-auto px-6 py-7 grid grid-cols-1 gap-7 ${wide ? '' : 'xl:grid-cols-[minmax(0,1fr)_440px]'}`}>
         <main className="min-w-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -126,9 +141,11 @@ function Shell({ me }) {
             <Route path="/prep/:id" element={<PrepPack />} />
             <Route path="/plan" element={<Plan />} />
             <Route path="/panic/:id" element={<Panic />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/onboarding" element={<Onboarding />} />
           </Routes>
         </main>
-        <aside className="space-y-6 xl:sticky xl:top-[92px] xl:self-start">
+        <aside className={wide ? 'grid lg:grid-cols-2 gap-6' : 'space-y-6 xl:sticky xl:top-[92px] xl:self-start'}>
           <ActivityLog />
           <ChatBox />
         </aside>

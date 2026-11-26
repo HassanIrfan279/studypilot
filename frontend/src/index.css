@@ -36,6 +36,17 @@ p { text-wrap: pretty; }
 .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800; }
 .btn-on-dark { @apply bg-white/15 text-white hover:bg-white/25 active:bg-white/30; }
 
+/* FullCalendar, themed to StudyPilot */
+.sp-calendar { --fc-border-color: #e2e8f0; --fc-today-bg-color: #eef2ff; --fc-now-indicator-color: #dc2626; --fc-button-bg-color: #3730a3; --fc-button-border-color: #3730a3; --fc-button-hover-bg-color: #312e81; --fc-button-active-bg-color: #1e1b4b; --fc-event-border-color: transparent; }
+.sp-calendar .fc-toolbar-title { font-size: 1.35rem; font-weight: 800; }
+.sp-calendar .fc-button { border-radius: 10px; font-weight: 600; text-transform: capitalize; }
+.sp-calendar .fc-event { border-radius: 8px; border-width: 2px; font-size: 13px; font-weight: 600; padding: 1px 3px; cursor: pointer; }
+.sp-calendar .ev-deadline { font-weight: 800; }
+.sp-calendar .ev-timetable { opacity: .75; }
+.sp-calendar .ev-done { opacity: .5; text-decoration: line-through; }
+.sp-calendar .fc-col-header-cell-cushion { font-weight: 700; color: #0f172a; }
+.sp-calendar .fc-timegrid-slot-label-cushion { color: #475569; font-variant-numeric: tabular-nums; }
+
 .urdu { font-family: var(--font-urdu); direction: rtl; line-height: 2.3; }
 
 @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(220,38,38,.55) } 100% { box-shadow: 0 0 0 16px rgba(220,38,38,0) } }

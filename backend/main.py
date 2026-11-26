@@ -16,7 +16,7 @@ import db
 import scheduler
 from activity_log import log
 import runs
-from agents import chat_agent, coordinator, planner_agent, voice_agent, watcher
+from agents import chat_agent, coordinator, interview, planner_agent, voice_agent, watcher
 from tools import audit_tools as audit
 from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 from config import FRONTEND_URL, TIMEZONE
@@ -321,6 +321,89 @@ async def set_due(item_id: str, body: DueIn):
     db.execute("UPDATE items SET due=? WHERE id=?", (iso, item_id))
     log("Coordinator", "Student confirmed a missing due date. Asking Planner to schedule.")
     res = await run(planner_agent.replan, item_id)
+    activity_log.refresh()
+    return res
+
+
+# ---------- onboarding interview + profile ----------
+class InterviewIn(BaseModel):
+    messages: list[dict] = []
+
+
+@app.post("/api/interview")
+async def interview_turn(body: InterviewIn):
+    return await run(interview.next_turn, body.messages)
+
+
+class ImageIn(BaseModel):
+    data_base64: str
+    mime: str = "image/jpeg"
+
+
+@app.post("/api/interview/timetable")
+async def interview_timetable(body: ImageIn):
+    import base64
+    blocks = await run(interview.read_timetable, base64.b64decode(body.data_base64), body.mime)
+    return {"blocks": blocks}
+
+
+class ProfileIn(BaseModel):
+    profile: dict
+    add_to_calendar: bool = True
+
+
+@app.post("/api/profile")
+async def save_profile(body: ProfileIn):
+    res = await run(interview.save_profile, body.profile, body.add_to_calendar)
+    activity_log.refresh()
+    from agents import brain
+    p = body.profile
+    asyncio.create_task(run(
+        brain.think_and_act, "profile", f"Re-planning around {p.get('name') or 'you'}",
+        "The student just finished the onboarding interview. Their profile: " + str(p)[:2500] +
+        "\n\nTheir weekly classes/commitments are now in Google Calendar. Review all upcoming "
+        "deadlines (list_upcoming): give their hardest courses more preparation, re-plan any "
+        "deadline whose sessions now clash or are too few, verify, then send one short "
+        "personalised message about the plan (in their preferred language)."))
+    return res
+
+
+@app.get("/api/profile")
+def get_profile():
+    return interview.get_profile()
+
+
+# ---------- in-app calendar (two-way with Google Calendar) ----------
+@app.get("/api/calendar")
+async def calendar_events(start: str, end: str):
+    return await run(cal.events_for_ui, start, end)
+
+
+class EventIn(BaseModel):
+    title: str = ""
+    start: str
+    end: str
+
+
+@app.post("/api/calendar/events")
+async def calendar_add(body: EventIn):
+    ev = await run(cal.add_student_event, body.title, body.start, body.end)
+    log("Planner", f"📅 You added '{body.title}' to your calendar. Checking it against your study plan…")
+    asyncio.create_task(run(watcher.check_clashes))  # agent reacts if it clashes with a session
+    return ev
+
+
+@app.patch("/api/calendar/events/{event_id}")
+async def calendar_move(event_id: str, body: EventIn):
+    res = await run(cal.update_event_from_ui, event_id, body.start, body.end, body.title)
+    asyncio.create_task(run(watcher.check_clashes))
+    activity_log.refresh()
+    return res
+
+
+@app.delete("/api/calendar/events/{event_id}")
+async def calendar_delete(event_id: str):
+    res = await run(cal.delete_event_from_ui, event_id)
     activity_log.refresh()
     return res
 

@@ -63,6 +63,14 @@ def get_deadline(item_id: str) -> dict:
             "flags": db.kv_get(f"flags:{item_id}") or []}
 
 
+def get_student_profile() -> dict:
+    """What we know about the student from the onboarding interview: goals, target GPA,
+    hardest courses, study hours per day, best study time, sleep, weekly commitments,
+    language and how strict they want you to be. Use it to personalise decisions."""
+    p = db.kv_get("profile") or {}
+    return p or {"note": "No interview yet — use sensible defaults."}
+
+
 def list_upcoming() -> dict:
     """All upcoming deadlines (next 14 days) with readiness and number of study sessions."""
     out = []
@@ -217,7 +225,7 @@ def flag_issue(item_id: str, issue: str) -> dict:
     return {"flagged": True}
 
 
-TOOLS = [get_deadline, list_upcoming, analyze_lecture, build_prep_pack, plan_sessions,
+TOOLS = [get_deadline, list_upcoming, get_student_profile, analyze_lecture, build_prep_pack, plan_sessions,
          clear_sessions, add_extra_session, move_session, find_free_slot, sessions_between,
          verify_calendar,
          notify_student, ask_student, flag_issue]
@@ -229,6 +237,8 @@ decide what to do and DO it with your tools, end to end.
 
 How you work:
 - First think in one or two short sentences about what matters (write it as plain text).
+- Personalise: check get_student_profile (hardest courses get more time; respect their
+  commitments; match the strictness and language they asked for).
 - Then act with tools. Look things up before deciding (get_deadline, list_upcoming).
 - Make sure every upcoming deadline has a prep pack and study sessions before it.
 - After any calendar change, ALWAYS call verify_calendar to confirm it really happened.
