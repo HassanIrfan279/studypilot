@@ -11,6 +11,7 @@ import json
 from fastapi import WebSocket, WebSocketDisconnect
 from google.genai import types
 
+import activity_log
 from activity_log import log
 from agents.assistant_tools import ALL_TOOLS, SYSTEM_INSTRUCTION, TOOLS_BY_NAME
 from config import LIVE_MODEL_CHAIN
@@ -76,6 +77,12 @@ async def voice_session(ws: WebSocket):
         async with _connect() as session:
             await ws.send_text(json.dumps({"type": "ready"}))
 
+            async def speak(text):
+                await session.send_client_content(turns=types.Content(role="user", parts=[types.Part(
+                    text=f"(System notice — say this to the student out loud now, in a natural way): {text}")]),
+                    turn_complete=True)
+            activity_log.add_voice(speak)
+
             async def browser_to_gemini():
                 while True:
                     msg = await ws.receive()
@@ -135,4 +142,5 @@ async def voice_session(ws: WebSocket):
         except Exception:
             pass
     finally:
+        activity_log.remove_voice(locals().get("speak"))
         log("Voice", "Voice session ended.")

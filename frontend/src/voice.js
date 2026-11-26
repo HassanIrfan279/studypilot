@@ -81,6 +81,7 @@ const fail = (msg) => { set({ status: 'error', error: msg }); stop(true) }
 
 export async function start() {
   if (isOn()) return
+  window.speechSynthesis?.cancel()  // never two voices at once
   set({ status: 'connecting', error: null })
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
@@ -146,9 +147,15 @@ export function sendText(text, type = 'text') {
   return false
 }
 
-// "Agent speaks first": use Gemini Live voice if connected, else the browser's built-in voice.
+// "Read aloud" button: Gemini Live voice if connected here, else the browser's built-in voice.
 export function announce(text) {
   if (sendText(text, 'announce')) return
+  speakAloud(text)
+}
+
+// Browser's built-in voice. Never used while a Gemini voice session is live in this tab.
+export function speakAloud(text) {
+  if (isOn()) return
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel()  // newest announcement wins; no stale queue
     const u = new SpeechSynthesisUtterance(text)

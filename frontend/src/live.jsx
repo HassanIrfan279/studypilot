@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, WS_BASE } from './api'
-import { announce } from './voice'
+import { speakAloud } from './voice'
 
 const LiveContext = createContext({ logs: [], tick: 0, connected: false, toast: null })
 export const useLive = () => useContext(LiveContext)
@@ -24,7 +24,10 @@ export function LiveProvider({ children }) {
     let ws, retry, closed = false
     const connect = () => {
       ws = new WebSocket(`${WS_BASE}/ws/activity`)
-      ws.onopen = () => setConnected(true)
+      ws.onopen = () => {
+        setConnected(true)
+        if (document.visibilityState === 'visible') ws.send('active')
+      }
       ws.onclose = () => {
         setConnected(false)
         if (!closed) retry = setTimeout(connect, 2000)
@@ -50,13 +53,23 @@ export function LiveProvider({ children }) {
           setToast(msg.text)
           clearTimeout(toastTimer.current)  // a newer announcement gets its full 12 s
           toastTimer.current = setTimeout(() => setToast(null), 12000)
-          announce(msg.text)
+          if (msg.speak) speakAloud(msg.text)  // the server picks ONE tab to talk (or Gemini voice)
           setTick((t) => t + 1)
         }
       }
     }
     connect()
-    return () => { closed = true; clearTimeout(retry); ws?.close() }
+    // The tab the student is looking at becomes the one that reads announcements aloud
+    const markActive = () => {
+      if (document.visibilityState === 'visible' && ws?.readyState === 1) ws.send('active')
+    }
+    window.addEventListener('focus', markActive)
+    document.addEventListener('visibilitychange', markActive)
+    return () => {
+      closed = true; clearTimeout(retry); ws?.close()
+      window.removeEventListener('focus', markActive)
+      document.removeEventListener('visibilitychange', markActive)
+    }
   }, [])
 
   return (

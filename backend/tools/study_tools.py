@@ -3,6 +3,7 @@ Every Gemini result is cached in SQLite so the same file is never analyzed twice
 import hashlib
 import json
 import re
+import threading
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -240,6 +241,47 @@ def fresh_questions(assessment_id, n=8, purpose="retake"):
     return quiz
 
 
+_next_locks: dict = {}
+
+
+def _next_lock(assessment_id):
+    return _next_locks.setdefault(assessment_id, threading.Lock())
+
+
+def prepare_next_quiz(assessment_id):
+    """After every attempt: write the NEXT quiz in the background (new questions, aimed at what
+    was just missed) and put it in the prep pack and cram sheet, so reopening never shows the
+    same questions again and 'Retake' is instant."""
+    with _next_lock(assessment_id):
+        try:
+            quiz = fresh_questions(assessment_id, 8, "retake")
+        except Exception as e:
+            log("Tutor", f"Couldn't pre-write the next quiz ({type(e).__name__}); it will be written on Retake.", "warn")
+            return
+        if not quiz.get("questions"):
+            return
+        db.kv_set(f"next_quiz:{assessment_id}", quiz)
+        pack = db.cache_get(f"prep:{assessment_id}")
+        if pack:
+            pack["quiz"] = quiz
+            db.cache_set(f"prep:{assessment_id}", pack)
+        sheet = db.cache_get(f"panic:{assessment_id}")
+        if sheet:
+            sheet["rapid_quiz"] = quiz["questions"][:5]
+            db.cache_set(f"panic:{assessment_id}", sheet)
+    log("Tutor", "Next practice quiz is ready — new questions on what you just missed.", "success")
+
+
+def take_next_quiz(assessment_id, n=8):
+    """Retake button: use the pre-written quiz if it's ready, else write one now."""
+    with _next_lock(assessment_id):  # waits if the background writer is still busy
+        quiz = db.kv_get(f"next_quiz:{assessment_id}")
+        if quiz and quiz.get("questions"):
+            db.execute("DELETE FROM kv WHERE key=?", (f"next_quiz:{assessment_id}",))
+            return {"questions": quiz["questions"][:n]}
+        return fresh_questions(assessment_id, n, "retake")
+
+
 def save_quiz_result(assessment_id, score, wrong=None):
     db.execute("INSERT INTO quiz_results(assessment_id, score, ts, wrong) VALUES (?,?,?,?)",
                (assessment_id, score, datetime.now().timestamp(), json.dumps(wrong or [])))
@@ -259,7 +301,12 @@ def build_prep_pack(assessment_id, refresh=False):
     file_ids = lectures_for_assessment(assessment_id)
     log("Tutor", f"Building prep pack for '{item['title']}' from {len(file_ids)} lecture(s).")
     analyses = _analyses(file_ids)
-    quiz = generate_practice_quiz(file_ids) if analyses else {"questions": []}
+    quiz = {"questions": []}
+    if analyses:
+        attempted = db.one("SELECT 1 FROM quiz_results WHERE assessment_id=?", (assessment_id,))
+        quiz = (db.kv_get(f"next_quiz:{assessment_id}")
+                or (fresh_questions(assessment_id, 8, "retake") if attempted else None)
+                or generate_practice_quiz(file_ids))  # first time only: the original quiz
     topics = []
     for a in analyses:
         topics.extend(a.get("youtube_search_topics", [])[:1])

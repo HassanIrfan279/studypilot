@@ -9,6 +9,7 @@ export default function Panic() {
   const [sheet, setSheet] = useState(null)
   const [error, setError] = useState(null)
   const [secs, setSecs] = useState(20 * 60)
+  const [round, setRound] = useState(0)
 
   useEffect(() => {
     const t0 = Date.now()
@@ -59,8 +60,14 @@ export default function Panic() {
         </div>
       )}
 
-      <Quiz questions={sheet.rapid_quiz || []} title="Rapid quiz: 5 questions"
-        onFinish={(score, wrong) => api.post(`/api/quiz/${id}/result`, { score, wrong })} />
+      <Quiz key={round} questions={sheet.rapid_quiz || []}
+        title={round ? `Rapid quiz #${round + 1}: 5 new questions` : 'Rapid quiz: 5 questions'}
+        onFinish={(score, wrong) => api.post(`/api/quiz/${id}/result`, { score, wrong })}
+        onNewQuestions={async () => {
+          const q = await api.get(`/api/quiz/${id}/new?n=5`)
+          setSheet((s) => ({ ...s, rapid_quiz: q.questions || [] }))
+          setRound((r) => r + 1)
+        }} />
     </div>
   )
 }

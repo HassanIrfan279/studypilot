@@ -245,6 +245,7 @@ class ScoreIn(BaseModel):
 async def quiz_result(assessment_id: str, body: ScoreIn):
     st.save_quiz_result(assessment_id, body.score, body.wrong)
     activity_log.refresh()
+    asyncio.create_task(run(st.prepare_next_quiz, assessment_id))  # every attempt -> new questions next time
     if body.score < 0.6:  # weak result -> the agent reacts on its own
         asyncio.create_task(run(watcher.on_quiz_result, assessment_id, body.score, body.wrong))
     return st.readiness(assessment_id)
@@ -320,7 +321,7 @@ async def replan(assessment_id: str):
 async def new_quiz(assessment_id: str, n: int = 8):
     """Retake: a brand-new set of questions aimed at previous mistakes."""
     log("Tutor", "Writing a brand-new quiz aimed at your previous mistakes…")
-    return await run(st.fresh_questions, assessment_id, n, "retake")
+    return await run(st.take_next_quiz, assessment_id, n)
 
 
 @app.post("/api/sessions/{event_id}/check")
@@ -501,8 +502,12 @@ async def ws_activity(ws: WebSocket):
     activity_log.add_client(ws)
     try:
         while True:
-            await ws.receive_text()
+            msg = await ws.receive_text()
+            if msg == "active":
+                activity_log.mark_active(ws)
     except WebSocketDisconnect:
+        pass
+    finally:
         activity_log.remove_client(ws)
 
 
