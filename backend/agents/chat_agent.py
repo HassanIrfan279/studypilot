@@ -1,6 +1,7 @@
 """Student-facing coordinator agent built with Google ADK (text chat).
 Uses the same tools as the voice agent. Falls back to plain Gemini function calling if ADK fails."""
 import functools
+import re
 
 from google.genai import types
 
@@ -25,6 +26,14 @@ def _logged(fn):
 
 
 TOOLS = [_logged(f) for f in ALL_TOOLS]
+
+# Small models sometimes print a tool call as text ("call: default_api:start_quiz{...}") instead of
+# making it. Such a reply is never shown to the student: we answer again via real function calling.
+_RAW_CALL = re.compile(r"default_api[:.]|^\s*id:\s*call_\d|call:\s*\w+[:.]\w+\s*[{(]|^\s*param:", re.M)
+
+
+def _looks_broken(text: str) -> bool:
+    return not text or bool(_RAW_CALL.search(text))
 
 try:
     from google.adk.agents import Agent
@@ -54,7 +63,10 @@ async def chat(message: str, session_id: str = "default") -> str:
                                                 new_message=content, run_config=RUN_CONFIG):
                 if event.content and event.content.parts and event.is_final_response():
                     reply = "".join(p.text or "" for p in event.content.parts)
-            return reply or "Done."
+            if not _looks_broken(reply):
+                return reply
+            log("Coordinator", "Chat answer came back as a raw tool call — answering again with "
+                               "direct function calling.", "warn")
         except Exception as e:
             log("Coordinator", f"Main agent model busy ({type(e).__name__}) — switching to backup "
                                "model.", "warn")
@@ -64,11 +76,13 @@ async def chat(message: str, session_id: str = "default") -> str:
     from config import MODEL_CHAIN
     cfg = types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION, tools=TOOLS)
     last = None
-    for model in MODEL_CHAIN[1:] or MODEL_CHAIN:
+    for model in MODEL_CHAIN:
         try:
             resp = await asyncio.to_thread(client.models.generate_content, model=model,
                                            contents=message, config=cfg)
-            return resp.text or "Done."
+            if not _looks_broken(resp.text or ""):
+                return resp.text
         except Exception as e:
             last = e
-    return f"Sorry, Gemini is overloaded right now ({last}). Try again in a moment."
+    return ("Sorry, I couldn't work that out just now. Try asking again in a moment."
+            + (f" ({type(last).__name__})" if last else ""))

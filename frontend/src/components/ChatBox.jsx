@@ -44,7 +44,7 @@ export default function ChatBox() {
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : ''}`}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-2 whitespace-pre-wrap ${m.role === 'user' ? 'bg-brand text-white' : 'bg-slate-100'}`}>
               {m.voice && <span className="text-xs opacity-70 flex items-center gap-1 mb-0.5"><Mic size={12} /> voice</span>}
-              {m.text}
+              {(m.text || '').replace(/\*\*/g, '')}
             </div>
           </div>
         ))}
