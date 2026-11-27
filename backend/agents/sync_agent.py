@@ -91,16 +91,44 @@ def _fetch_course(c):
                       "link": recent[0]["link"] if recent else "", "files": [],
                       "source": "announcement"})
         seen.add(item_id)
-    # Safety net: never drop a tracked deadline unless an announcement clearly cancelled it
+    # Safety net: never drop a tracked deadline just because Gemini skipped it once. Drop it only if
+    # its source post is gone (the teacher deleted it): no current announcement holds its evidence
+    # or its key words. Then the agents cancel it like any other removed deadline.
+    texts = [_norm(a["text"]) for a in anns]
     for r in tracked_rows:
         if r["id"] not in seen or not ok:
             if any(i["id"] == r["id"] for i in items):
+                continue
+            if ok and r["id"] not in seen and not _still_posted(r, texts):
+                db.kv_set(f"cancel_reason:{r['id']}", "The teacher deleted the announcement it came from.")
+                log("Sync", f"🗑 '{r['title']}' in {c['name']}: its announcement was deleted, so it's no "
+                            "longer a deadline.")
                 continue
             items.append({**r, "files": []})
     if new_titles:
         log("Sync", f"🔎 Gemini found {len(new_titles)} deadline(s) hidden in {c['name']} "
                     f"announcements: {', '.join(new_titles)}.")
     return items, materials
+
+
+_GENERIC = {"quiz", "test", "exam", "assignment", "the", "a", "an", "of", "on", "in", "for", "and", "class"}
+
+
+def _norm(text):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").replace("\xa0", " ").lower()).split())
+
+
+def _still_posted(row, texts):
+    """Is a tracked announcement-deadline still backed by a current announcement?"""
+    ev = row.get("description") or ""
+    for frag in re.split(r"\.\.\.|…", ev):
+        f = _norm(frag)
+        if len(f) >= 12 and any(f in t for t in texts):
+            return True
+    keys = [w for w in _norm(row["title"]).split() if w not in _GENERIC]
+    if not keys:
+        return True  # nothing specific to look for: keep it to be safe
+    return any(all(re.search(rf"\b{re.escape(k)}\b", t) for k in keys) for t in texts)
 
 
 def _local(iso):
