@@ -33,9 +33,13 @@ from tools import notes_tools as notes
 @asynccontextmanager
 async def lifespan(app):
     activity_log.set_loop(asyncio.get_running_loop())
-    task = asyncio.create_task(scheduler.loop())
+    from config import BACKGROUND_AGENT
+    task = asyncio.create_task(scheduler.loop()) if BACKGROUND_AGENT else None
+    if not BACKGROUND_AGENT:
+        print("[StudyPilot] BACKGROUND_AGENT=false: web app only, no background agents in this copy.")
     yield
-    task.cancel()
+    if task:
+        task.cancel()
     # Background Google/Gemini calls run in worker threads; don't wait for them on Ctrl-C
     os._exit(0)
 

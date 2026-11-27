@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BellRing, CheckCircle2, Flame, Loader2, Plane, RotateCw, XCircle } from 'lucide-react'
-import { api } from '../api'
+import { BellRing, CheckCircle2, Flame, KeyRound, Loader2, Plane, RotateCw, XCircle } from 'lucide-react'
+import { api, loginUrl } from '../api'
 
 // One screen to run right before going on stage: every service the demo depends on.
 export default function Preflight() {
@@ -53,6 +53,9 @@ export default function Preflight() {
           <button className="btn-ghost" onClick={alert} disabled={!!busy}>
             {busy === 'alert' ? <Loader2 size={18} className="animate-spin" /> : <BellRing size={18} />} Send test alert
           </button>
+          <a className="btn-ghost" href={loginUrl} title="Google testing-mode sign-ins last 7 days: renew the day before the demo">
+            <KeyRound size={18} /> Renew Google sign-in
+          </a>
         </div>
       </div>
 

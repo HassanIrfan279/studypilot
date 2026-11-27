@@ -62,6 +62,9 @@ TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM") or "whatsapp:+141552388
 WHATSAPP_TO = os.getenv("WHATSAPP_TO", "")  # the student's number, e.g. +923001234567
 # Gemini decides what to do on each change (False = fixed rule-based pipeline)
 AGENT_BRAIN = os.getenv("AGENT_BRAIN", "true").lower() == "true"
+# Background agents (sync, nightly review, internship hunt). Only ONE running copy should have this on,
+# otherwise two copies react to the same Classroom change. Set false on a second/test instance.
+BACKGROUND_AGENT = os.getenv("BACKGROUND_AGENT", "true").lower() == "true"
 
 # ADK / google-genai read the key from this env var
 if GEMINI_API_KEY:

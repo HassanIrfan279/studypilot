@@ -11,6 +11,7 @@ services:
       FRONTEND_URL: https://${DOMAIN}
       DATA_DIR: /data
       PORT: "8000"
+      BACKGROUND_AGENT: "true"   # the cloud copy is the one that runs the agents 24/7
     volumes:
       - studypilot-data:/data                       # database + sign-in + cache survive restarts
       - ../backend/credentials.json:/app/backend/credentials.json:ro

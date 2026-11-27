@@ -146,6 +146,32 @@ def _cache():
     return f"{packs}/{len(upcoming)} prep packs ready (instant on stage)"
 
 
+def _drafts():
+    from agents import career_agent
+    if not career_agent.has_compose():
+        raise RuntimeError("Gmail drafts permission not granted (internship applications and exam-clash emails)")
+    return "can create Gmail drafts (never sends)"
+
+
+def _career():
+    from agents import career_agent
+    p = career_agent.profile()
+    if not p:
+        raise RuntimeError("No CV yet")
+    items = career_agent.all_items()
+    waiting = sum(1 for i in items if i["status"] in ("ready", "needs_info"))
+    return f"CV ready ({p.get('name') or 'you'}) · {len(items)} posting(s) tracked · {waiting} waiting for you"
+
+
+def _coach():
+    from agents import coach
+    last = db.kv_get("last_review")
+    h = coach.habit_stats()
+    when = datetime.fromtimestamp(last["ts"], ZoneInfo(TIMEZONE)).strftime("%a %H:%M") if last else "not yet"
+    return (f"nightly review at {coach.REVIEW_HOUR}:00 (last: {when}) · habits "
+            + ("learning" if h["learning"] else "learned") + f" · {len(coach.reviews())} review quiz(zes) scheduled")
+
+
 FIXES = {
     "Google sign-in": "Click Sign in again (testing-mode Google tokens expire after 7 days).",
     "Classroom": "Check the internet connection, then sign in again.",
@@ -157,6 +183,9 @@ FIXES = {
     "Phone alerts": "Add DISCORD_WEBHOOK_URL to the environment.",
     "Background sync": "Restart the backend.",
     "Pre-built content": "Click Warm up and wait for “All set”.",
+    "Gmail drafts": "Sign in again and tick the Gmail box.",
+    "Internship agent": "Open Internships and upload or build your CV.",
+    "Coach (nightly review)": "Restart the backend.",
 }
 
 
@@ -166,7 +195,8 @@ def run_all():
     checks += [(f"Gemini · {m}" + (" (main)" if i == 0 else " (backup)"), _gemini_model(m))
                for i, m in enumerate(MODEL_CHAIN[:3])]
     checks += [("Voice (Gemini Live)", _live_check), ("YouTube", _youtube), ("Phone alerts", _alerts),
-               ("Background sync", _sync), ("Pre-built content", _cache)]
+               ("Background sync", _sync), ("Pre-built content", _cache), ("Gmail drafts", _drafts),
+               ("Internship agent", _career), ("Coach (nightly review)", _coach)]
     out = []
     pool = ThreadPoolExecutor(max_workers=len(checks))
     futures = [(name, pool.submit(_timed, fn)) for name, fn in checks]

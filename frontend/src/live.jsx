@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, WS_BASE } from './api'
 import { speakAloud } from './voice'
 
-const LiveContext = createContext({ logs: [], tick: 0, connected: false, toast: null })
+const LiveContext = createContext({ logs: [], runs: [], tick: 0, connected: false, toast: null, setToast: () => {} })
 export const useLive = () => useContext(LiveContext)
 
 export function LiveProvider({ children }) {
@@ -19,8 +19,8 @@ export function LiveProvider({ children }) {
   navRef.current = navigate
 
   useEffect(() => {
-    api.get('/api/activity').then(setLogs).catch(() => {})
-    api.get('/api/runs').then(setRuns).catch(() => {})
+    api.get('/api/activity').then((r) => setLogs(Array.isArray(r) ? r : [])).catch(() => {})
+    api.get('/api/runs').then((r) => setRuns(Array.isArray(r) ? r : [])).catch(() => {})
     let ws, retry, closed = false
     const connect = () => {
       ws = new WebSocket(`${WS_BASE}/ws/activity`)

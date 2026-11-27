@@ -20,7 +20,7 @@ const LEVEL = {
 }
 
 export default function ActivityLog() {
-  const { logs, runs } = useLive()
+  const { logs = [], runs = [] } = useLive()
   const [tab, setTab] = useState('runs')
   const box = useRef(null)
   const first = useRef(true)
