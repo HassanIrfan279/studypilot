@@ -17,6 +17,7 @@ import Onboarding from './pages/Onboarding'
 import Notes from './pages/Notes'
 import Preflight from './pages/Preflight'
 import Internships from './pages/Internships'
+import Review from './pages/Review'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function Logo({ className = '' }) {
@@ -153,6 +154,7 @@ function Shell({ me }) {
             <Route path="/notes/:id" element={<Notes />} />
             <Route path="/preflight" element={<Preflight />} />
             <Route path="/internships" element={<Internships />} />
+            <Route path="/review/:id" element={<Review />} />
           </Routes>
           </ErrorBoundary>
         </main>

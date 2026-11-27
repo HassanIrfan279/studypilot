@@ -277,7 +277,8 @@ def find_free_slot(minutes, after: datetime, before: datetime, prefer_evening=Tr
     for s, e in get_free_slots(after, before):
         start = s
         if prefer_evening:
-            evening = s.replace(hour=17, minute=0, second=0, microsecond=0)
+            from agents import coach
+            evening = s.replace(hour=coach.preferred_hour(17), minute=0, second=0, microsecond=0)
             if s < evening and evening + need <= e:
                 start = evening
         start = start + timedelta(minutes=(30 - start.minute % 30) % 30)

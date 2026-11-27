@@ -5,6 +5,7 @@ import { api, fmtDate } from '../api'
 import { useLive } from '../live'
 import CourseTag from '../components/CourseTag'
 import DailyBrief from '../components/DailyBrief'
+import { CoachDashboard } from '../components/Coach'
 import DeadlineCard from '../components/DeadlineCard'
 
 export default function Dashboard() {
@@ -22,6 +23,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-7">
       <DailyBrief tick={tick} />
+      <CoachDashboard />
 
       {courses.length > 0 && (
         <div className="flex gap-2.5 flex-wrap">

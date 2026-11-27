@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   AlertTriangle, BrainCircuit, Briefcase, CalendarX2, CheckCircle2, ChevronDown, CircleHelp, ClipboardX,
-  GraduationCap, Loader2, Mail, MessageCircle, School, ShieldAlert, UserRound, Wrench,
+  GraduationCap, Loader2, Mail, MessageCircle, Moon, Scale, School, ShieldAlert, ShieldCheck, UserRound, Wrench,
 } from 'lucide-react'
 
 const TRIGGER = {
@@ -13,6 +13,8 @@ const TRIGGER = {
   profile: { icon: UserRound, label: 'Your profile' },
   gmail: { icon: Mail, label: 'Class email' },
   career: { icon: Briefcase, label: 'Internship hunt' },
+  review: { icon: Moon, label: 'Nightly review' },
+  tradeoff: { icon: Scale, label: 'Approved plan' },
 }
 const STEP = {
   think: { icon: BrainCircuit, cls: 'text-indigo-900 bg-indigo-50', label: 'Thinking' },
@@ -21,6 +23,7 @@ const STEP = {
   warn: { icon: AlertTriangle, cls: 'text-amber-950 bg-amber-50', label: 'Warning' },
   ask: { icon: CircleHelp, cls: 'text-amber-950 bg-amber-100', label: 'Asked you' },
   say: { icon: MessageCircle, cls: 'text-white bg-indigo-700', label: 'Told you' },
+  review: { icon: ShieldCheck, cls: 'text-teal-950 bg-teal-50', label: 'Reviewer agent' },
 }
 const STATUS = {
   running: 'bg-indigo-100 text-indigo-900',

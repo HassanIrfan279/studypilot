@@ -6,12 +6,27 @@ from zoneinfo import ZoneInfo
 
 import db
 from activity_log import log
-from agents import career_agent, coordinator, sync_agent, watcher
+from agents import career_agent, coach, coordinator, sync_agent, watcher
 from auth import get_credentials
 from config import SYNC_INTERVAL_SECONDS, TIMEZONE
 
 _lock = threading.Lock()
 _career_busy = threading.Lock()
+
+
+_coach_busy = threading.Lock()
+
+
+def _coach_tick():
+    """Nightly review once a day (9 PM). Own thread so it never blocks Classroom sync."""
+    if not _coach_busy.acquire(blocking=False):
+        return
+    try:
+        coach.tick()
+    except Exception as e:
+        print(f"[Coach] tick failed: {e}")
+    finally:
+        _coach_busy.release()
 
 
 def _career_tick():
@@ -81,4 +96,5 @@ async def loop():
             await asyncio.to_thread(sync_once, first)
             first = False
             threading.Thread(target=_career_tick, daemon=True).start()
+            threading.Thread(target=_coach_tick, daemon=True).start()
         await asyncio.sleep(SYNC_INTERVAL_SECONDS)

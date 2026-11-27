@@ -21,7 +21,9 @@ def estimate_hours(item):
         hours = 2.0
     if item["kind"] == "assignment":
         hours += 1.0
-    return max(1.5, min(hours, 4.5))  # max 3 x 90-min sessions per deadline
+    from agents import coach  # behind on the course goal -> study more
+    boost = coach.intensity(item["course_id"])
+    return max(1.5, min(hours * boost, 4.5 if boost == 1.0 else 6.0))
 
 
 def split_sessions(hours):
@@ -46,7 +48,8 @@ def _pick(slots, n, length, one_per_day=True):
         if one_per_day and s.date() in used_days:
             continue
         need = timedelta(minutes=length)
-        start = max(s, s.replace(hour=PREFERRED_START_HOUR, minute=0, second=0, microsecond=0))
+        from agents import coach  # learned from which sessions the student actually completes
+        start = max(s, s.replace(hour=coach.preferred_hour(PREFERRED_START_HOUR), minute=0, second=0, microsecond=0))
         start = _round_up(start)
         if start + need > e:
             start = _round_up(s)  # evening doesn't fit, use the start of the free slot

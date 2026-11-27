@@ -5,6 +5,7 @@ import { api, fmtDate } from '../api'
 import { useLive } from '../live'
 import CourseTag from '../components/CourseTag'
 import SessionCheck from '../components/SessionCheck'
+import { CoachPlan } from '../components/Coach'
 
 const time = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 
@@ -33,6 +34,7 @@ export default function Plan() {
 
   return (
     <div className="space-y-7">
+      <CoachPlan />
       {checking && <SessionCheck session={checking} onClose={() => { setChecking(null); load() }} />}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-2xl font-extrabold flex-1">Study plan</h1>

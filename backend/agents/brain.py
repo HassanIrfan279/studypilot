@@ -110,7 +110,10 @@ def plan_sessions(item_id: str) -> dict:
     """Book study sessions in Google Calendar before this deadline (replaces any future
     StudyPilot sessions for it). Avoids the student's existing events."""
     _say("act", "Planner is booking study time in Google Calendar")
-    return planner.replan(item_id, "agent decision")
+    out = planner.replan(item_id, "agent decision")
+    from agents import coach
+    out["reviewer"] = coach.review_plan(item_id)
+    return out
 
 
 def clear_sessions(item_id: str) -> dict:
@@ -131,9 +134,10 @@ def add_extra_session(item_id: str, minutes: int, focus: str) -> dict:
         return {"error": "deadline has no due date"}
     minutes = max(30, min(int(minutes), 120))
     due = datetime.fromisoformat(it["due"]).astimezone(TZ)
-    slot = cal.find_free_slot(minutes, datetime.now(TZ) + timedelta(minutes=30), due - timedelta(hours=2))
+    from agents import coach  # the Reviewer agent must approve the slot (clashes, breaks, load)
+    slot = coach.reviewed_slot(minutes, datetime.now(TZ) + timedelta(minutes=30), due - timedelta(hours=2), it)
     if not slot:
-        return {"error": "no free time before the deadline"}
+        return {"error": "no free time before the deadline that the Reviewer approves"}
     _say("act", f"Planner is booking an extra {minutes}-min session on {focus}")
     ev = cal.create_study_event(it, st.course_name(it["course_id"]), slot[0], slot[1], 0, 0, focus=focus)
     return {"event_id": ev["id"], "start": slot[0].strftime("%a %d %b %H:%M")}
@@ -145,6 +149,14 @@ def move_session(event_id: str, new_start_iso: str) -> dict:
     start = datetime.fromisoformat(new_start_iso)
     if start.tzinfo is None:
         start = start.replace(tzinfo=TZ)
+    from agents import coach
+    row = db.one("SELECT * FROM sessions WHERE event_id=?", (event_id,))
+    if row:
+        length = datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])
+        verdict = coach.reviewer_check(start, start + length, st.get_item(row["assessment_id"]), ignore_event=event_id)
+        if not verdict["ok"]:
+            return {"rejected_by_reviewer": verdict["reasons"],
+                    "hint": "Pick a different time with find_free_slot (later in the day or another day)."}
     _say("act", f"Planner is moving a session to {start.strftime('%a %H:%M')}")
     cal.move_study_event(event_id, start)
     return {"ok": True, "new_start": start.strftime("%a %d %b %H:%M")}

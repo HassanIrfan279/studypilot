@@ -20,7 +20,7 @@ import scheduler
 from activity_log import log
 import preflight
 import runs
-from agents import career_agent, chat_agent, cv_builder, coordinator, interview, planner_agent, voice_agent, watcher
+from agents import career_agent, chat_agent, coach, cv_builder, coordinator, interview, planner_agent, voice_agent, watcher
 from tools import audit_tools as audit
 from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 from config import FRONTEND_URL, TIMEZONE
@@ -247,6 +247,8 @@ async def quiz_result(assessment_id: str, body: ScoreIn):
     st.save_quiz_result(assessment_id, body.score, body.wrong)
     activity_log.refresh()
     asyncio.create_task(run(st.prepare_next_quiz, assessment_id))  # every attempt -> new questions next time
+    if body.wrong:  # wrong topics come back after 1, 3 and 7 days
+        asyncio.create_task(run(coach.schedule_reviews, assessment_id, body.wrong))
     if body.score < 0.6:  # weak result -> the agent reacts on its own
         asyncio.create_task(run(watcher.on_quiz_result, assessment_id, body.score, body.wrong))
     return st.readiness(assessment_id)
@@ -665,6 +667,63 @@ async def cv_sync():
         return await run(cv_builder.sync_from_doc)
     except ValueError as e:
         return _bad(e)
+
+
+# ---------- coach: habits, goals, reviews, tradeoffs, nightly review ----------
+class GoalIn(BaseModel):
+    grade: str = ""
+
+
+class DecideIn(BaseModel):
+    feedback: str = ""
+
+
+class ReviewScoreIn(BaseModel):
+    score: float
+
+
+@app.get("/api/coach")
+async def coach_state():
+    def gather():
+        return {"habits": coach.habit_stats(), "goals": coach.goal_status(), "reviews": coach.reviews(),
+                "proposals": coach.pending_proposals(), "last_review": db.kv_get("last_review"),
+                "review_hour": coach.REVIEW_HOUR}
+    return await run(gather)
+
+
+@app.put("/api/goals/{course_id}")
+async def put_goal(course_id: str, body: GoalIn):
+    return await run(coach.set_goal, course_id, body.grade)
+
+
+@app.post("/api/review/run")
+async def run_review_now():
+    asyncio.create_task(run(coach.nightly_review, "manual"))
+    return {"started": True}
+
+
+@app.post("/api/workload/check")
+async def workload_check():
+    return await run(coach.propose_tradeoff)
+
+
+@app.post("/api/proposals/{pid}/{action}")
+async def decide_proposal(pid: int, action: str, body: DecideIn):
+    try:
+        return await run(coach.decide, pid, action, body.feedback)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.get("/api/reviews/{rid}/quiz")
+async def review_quiz(rid: int):
+    out = await run(coach.review_quiz, rid)
+    return out or JSONResponse({"error": "Unknown review"}, status_code=404)
+
+
+@app.post("/api/reviews/{rid}/result")
+async def review_result(rid: int, body: ReviewScoreIn):
+    return await run(coach.review_result, rid, body.score)
 
 
 @app.post("/api/internships/track")
