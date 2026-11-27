@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { BookOpenCheck, Briefcase, CalendarDays, Plane, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
+import { Activity, Bot, BookOpenCheck, Briefcase, CalendarDays, Menu, Plane, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
 import { api, loginUrl } from './api'
 import { LiveProvider, useLive } from './live'
 import ActivityLog from './components/ActivityLog'
@@ -18,6 +18,9 @@ import Notes from './pages/Notes'
 import Preflight from './pages/Preflight'
 import Internships from './pages/Internships'
 import Review from './pages/Review'
+import Agents from './pages/Agents'
+import AgentAvatar from './components/AgentAvatar'
+import { AGENTS } from './agents'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function Logo({ className = '' }) {
@@ -81,13 +84,94 @@ function Toast() {
   )
 }
 
-function Shell({ me }) {
+const NAV = [
+  { group: 'Study', links: [
+    { to: '/', end: true, icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
+    { to: '/plan', icon: ListChecks, label: 'Study plan' },
+  ] },
+  { group: 'Career', links: [
+    { to: '/internships', icon: Briefcase, label: 'Internships' },
+  ] },
+  { group: 'Your agents', links: [
+    { to: '/agents', icon: Bot, label: 'Meet the agents' },
+    { to: '/preflight', icon: Plane, label: 'System check' },
+  ] },
+  { group: 'You', links: [
+    { to: '/onboarding', icon: UserRound, label: 'About me' },
+  ] },
+]
+
+function pageTitle(path) {
+  const map = { '/': 'Dashboard', '/calendar': 'Calendar', '/plan': 'Study plan', '/internships': 'Internships',
+    '/agents': 'Meet the agents', '/preflight': 'System check', '/onboarding': 'About me' }
+  if (map[path]) return map[path]
+  const first = path.split('/')[1]
+  return { course: 'Course', lecture: 'Lecture', prep: 'Prep pack', panic: 'Panic mode', notes: 'Study notes', review: 'Spaced review' }[first] || 'StudyPilot'
+}
+
+function Sidebar({ open, onClose }) {
   const { connected } = useLive()
+  return (
+    <>
+      {open && <div className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden" onClick={onClose} aria-hidden="true" />}
+      <aside className={`sp-sidebar fixed inset-y-0 left-0 z-50 w-[248px] flex flex-col text-white transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="relative z-10 px-5 pt-5 pb-4 flex items-center justify-between">
+          <Link to="/" onClick={onClose}><Logo className="text-xl" /></Link>
+          <button className="lg:hidden text-indigo-200 p-1" onClick={onClose} aria-label="Close menu"><X size={22} /></button>
+        </div>
+        <nav className="relative z-10 flex-1 overflow-y-auto px-3 space-y-5" aria-label="Main">
+          {NAV.map((g) => (
+            <div key={g.group}>
+              <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-[.14em] text-indigo-300/60">{g.group}</p>
+              <div className="space-y-0.5">
+                {g.links.map(({ to, end, icon: Icon, label }) => (
+                  <NavLink key={to} to={to} end={end} onClick={onClose} className={({ isActive }) => `sp-nav ${isActive ? 'active' : ''}`}>
+                    <Icon size={19} />{label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+        <Link to="/agents" onClick={onClose} className="relative z-10 mx-3 mb-3 rounded-2xl bg-white/5 hover:bg-white/10 transition p-3 block">
+          <div className="flex -space-x-3">
+            {AGENTS.slice(0, 5).map((a) => <span key={a.id} className="rounded-full bg-[#111735] ring-2 ring-[#111735]"><AgentAvatar agent={a} size={38} /></span>)}
+          </div>
+          <p className="mt-2 text-sm font-semibold flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            {connected ? '8 agents online' : 'Reconnecting…'}
+          </p>
+        </Link>
+      </aside>
+    </>
+  )
+}
+
+function AgentDrawer({ open, onClose }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50" role="dialog" aria-label="Agent activity and chat">
+      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
+      <div className="absolute right-0 inset-y-0 w-full max-w-[460px] bg-[#f4f6fb] shadow-2xl p-4 overflow-y-auto space-y-4 slide-in">
+        <div className="flex items-center">
+          <h2 className="text-lg font-extrabold flex-1">Your agents</h2>
+          <button className="btn-ghost !p-2" onClick={onClose} aria-label="Close"><X size={20} /></button>
+        </div>
+        <ActivityLog />
+        <ChatBox />
+      </div>
+    </div>
+  )
+}
+
+function Shell({ me }) {
   const [syncing, setSyncing] = useState(false)
+  const [menu, setMenu] = useState(false)
+  const [drawer, setDrawer] = useState(false)
   const location = useLocation()
-  const nav =({ isActive }) =>
-    `inline-flex items-center gap-2 px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition ${isActive ? 'bg-white text-brand' : 'text-indigo-100 hover:bg-white/10'}`
-  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding' || location.pathname.startsWith('/notes') || location.pathname === '/preflight' || location.pathname === '/internships'
+  const home = location.pathname === '/'
+  useEffect(() => { setDrawer(false) }, [location.pathname])
 
   const syncNow = async () => {
     setSyncing(true)
@@ -96,73 +180,75 @@ function Shell({ me }) {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-brand text-white sticky top-0 z-40 shadow-md">
-        <div className="max-w-[1680px] mx-auto px-6 h-[68px] flex items-center gap-4">
-          <Link to="/" className="shrink-0"><Logo className="text-2xl" /></Link>
-          <nav className="flex gap-1 ml-2 lg:ml-4 min-w-0 overflow-x-auto">
-            <NavLink to="/" end className={nav}><LayoutDashboard size={19} /><span className="hidden lg:inline">Dashboard</span></NavLink>
-            <NavLink to="/calendar" className={nav}><CalendarDays size={19} /><span className="hidden lg:inline">Calendar</span></NavLink>
-            <NavLink to="/plan" className={nav}><ListChecks size={19} /><span className="hidden lg:inline">Study plan</span></NavLink>
-            <NavLink to="/internships" className={nav}><Briefcase size={19} /><span className="hidden lg:inline">Internships</span></NavLink>
-            <NavLink to="/onboarding" className={nav}><UserRound size={19} /><span className="hidden lg:inline">About me</span></NavLink>
-            <NavLink to="/preflight" className={nav} title="Pre-flight check before the demo"><Plane size={19} /><span className="hidden lg:inline">Check</span></NavLink>
-          </nav>
-          <div className="ml-auto flex items-center gap-3">
-            <span className={`hidden 2xl:flex text-sm font-semibold items-center gap-2 whitespace-nowrap ${connected ? 'text-emerald-200' : 'text-amber-200'}`}>
-              <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              {connected ? 'Agent live' : 'Reconnecting…'}
-            </span>
-            <button onClick={syncNow} disabled={syncing} className="btn-on-dark">
-              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
-              <span className="hidden xl:inline">{syncing ? 'Syncing…' : 'Sync now'}</span>
-            </button>
-            <VoiceButton />
+      <Sidebar open={menu} onClose={() => setMenu(false)} />
+      <div className="lg:pl-[248px]">
+        <header className="sp-topbar sticky top-0 z-30 border-b border-slate-200/70">
+          <div className="max-w-[1500px] mx-auto px-4 md:px-7 h-16 flex items-center gap-3">
+            <button className="lg:hidden btn-ghost !p-2" onClick={() => setMenu(true)} aria-label="Open menu"><Menu size={20} /></button>
+            <p className="text-[15px] font-semibold text-slate-500 truncate">
+              <span className="hidden sm:inline">StudyPilot <span className="mx-1.5 text-slate-300">/</span></span>
+              <span className="text-slate-900">{pageTitle(location.pathname)}</span>
+            </p>
+            <div className="ml-auto flex items-center gap-2">
+              {!home && (
+                <button className="btn-ghost" onClick={() => setDrawer(true)} title="Agent activity and chat">
+                  <Activity size={18} /><span className="hidden md:inline">Agents</span>
+                </button>
+              )}
+              <button onClick={syncNow} disabled={syncing} className="btn-ghost" title="Check Classroom now">
+                <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                <span className="hidden md:inline">{syncing ? 'Syncing…' : 'Sync'}</span>
+              </button>
+              <VoiceButton />
+            </div>
+          </div>
+        </header>
+        <Toast />
+        <div className="max-w-[1500px] mx-auto px-4 md:px-7 py-6 space-y-5">
+          {me?.needs_upgrade && (
+            <div className="card !py-3 !border-amber-300 !bg-amber-50 flex items-center gap-3 flex-wrap">
+              <ShieldCheck size={20} className="text-amber-700" />
+              <span className="font-semibold flex-1 min-w-[16rem]">StudyPilot can now read class emails, organize your Drive notes and prepare internship applications as Gmail drafts (it never sends). Sign in once more to allow it.</span>
+              <a href={loginUrl} className="btn-primary !py-1.5">Sign in again</a>
+            </div>
+          )}
+          {!me?.needs_upgrade && !me?.profile_done && location.pathname !== '/onboarding' && (
+            <div className="card !py-3 !border-indigo-200 !bg-indigo-50 flex items-center gap-3 flex-wrap">
+              <UserRound size={20} className="text-brand" />
+              <span className="font-semibold flex-1 min-w-[16rem]">I plan better when I know you. Take the 3-minute interview: goals, timetable, and what gets in the way.</span>
+              <Link to="/onboarding" className="btn-primary !py-1.5">Start interview</Link>
+            </div>
+          )}
+          <div className={`grid grid-cols-1 gap-6 ${home ? 'xl:grid-cols-[minmax(0,1fr)_400px]' : ''}`}>
+            <main className={`min-w-0 ${/^\/(prep|lecture|course|panic|review)\//.test(location.pathname) ? 'max-w-[1100px] w-full mx-auto' : ''}`}>
+              <ErrorBoundary key={location.pathname} label="This page">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/course/:id" element={<Course />} />
+                <Route path="/lecture/:fileId" element={<Lecture />} />
+                <Route path="/prep/:id" element={<PrepPack />} />
+                <Route path="/plan" element={<Plan />} />
+                <Route path="/panic/:id" element={<Panic />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/notes/:id" element={<Notes />} />
+                <Route path="/preflight" element={<Preflight />} />
+                <Route path="/internships" element={<Internships />} />
+                <Route path="/review/:id" element={<Review />} />
+                <Route path="/agents" element={<Agents />} />
+              </Routes>
+              </ErrorBoundary>
+            </main>
+            {home && (
+              <aside className="space-y-5 xl:sticky xl:top-[88px] xl:self-start">
+                <ActivityLog />
+                <ChatBox />
+              </aside>
+            )}
           </div>
         </div>
-      </header>
-      <Toast />
-      {me?.needs_upgrade && (
-        <div className="bg-amber-100 border-b border-amber-300 text-amber-950">
-          <div className="max-w-[1680px] mx-auto px-6 py-2.5 flex items-center gap-3 flex-wrap">
-            <ShieldCheck size={20} />
-            <span className="font-semibold">StudyPilot can now read class emails, organize your Drive notes and prepare internship applications as Gmail drafts (it never sends). Sign in once more to allow it.</span>
-            <a href={loginUrl} className="btn-primary !py-1.5 ml-auto">Sign in again</a>
-          </div>
-        </div>
-      )}
-      {!me?.needs_upgrade && !me?.profile_done && location.pathname !== '/onboarding' && (
-        <div className="bg-indigo-50 border-b border-indigo-200 text-indigo-950">
-          <div className="max-w-[1680px] mx-auto px-6 py-2.5 flex items-center gap-3 flex-wrap">
-            <UserRound size={20} />
-            <span className="font-semibold">I plan better when I know you. Take the 3-minute interview: goals, timetable, and what gets in the way.</span>
-            <Link to="/onboarding" className="btn-primary !py-1.5 ml-auto">Start interview</Link>
-          </div>
-        </div>
-      )}
-      <div className={`max-w-[1680px] mx-auto px-6 py-7 grid grid-cols-1 gap-7 ${wide ? '' : 'xl:grid-cols-[minmax(0,1fr)_440px]'}`}>
-        <main className="min-w-0">
-          <ErrorBoundary key={location.pathname} label="This page">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/course/:id" element={<Course />} />
-            <Route path="/lecture/:fileId" element={<Lecture />} />
-            <Route path="/prep/:id" element={<PrepPack />} />
-            <Route path="/plan" element={<Plan />} />
-            <Route path="/panic/:id" element={<Panic />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/notes/:id" element={<Notes />} />
-            <Route path="/preflight" element={<Preflight />} />
-            <Route path="/internships" element={<Internships />} />
-            <Route path="/review/:id" element={<Review />} />
-          </Routes>
-          </ErrorBoundary>
-        </main>
-        <aside className={wide ? 'grid lg:grid-cols-2 gap-6' : 'space-y-6 xl:sticky xl:top-[92px] xl:self-start'}>
-          <ActivityLog />
-          <ChatBox />
-        </aside>
       </div>
+      <AgentDrawer open={drawer} onClose={() => setDrawer(false)} />
     </div>
   )
 }

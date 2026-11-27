@@ -3,8 +3,8 @@ import { AlertTriangle, Loader2, Mic, Square, Volume2 } from 'lucide-react'
 import { start, stop, subscribe } from '../voice'
 
 const STATES = {
-  off: { icon: Mic, label: 'Talk', cls: 'bg-white text-brand hover:bg-indigo-50' },
-  connecting: { icon: Loader2, label: 'Connecting…', cls: 'bg-white text-brand', spin: true },
+  off: { icon: Mic, label: 'Talk', cls: 'bg-brand text-white hover:bg-indigo-800' },
+  connecting: { icon: Loader2, label: 'Connecting…', cls: 'bg-indigo-100 text-brand', spin: true },
   listening: { icon: Square, label: 'Listening · tap to stop', cls: 'bg-red-600 text-white listening' },
   speaking: { icon: Volume2, label: 'Speaking…', cls: 'bg-emerald-500 text-white' },
   error: { icon: AlertTriangle, label: 'Voice error · retry', cls: 'bg-amber-300 text-amber-950' },
