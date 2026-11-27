@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle, Briefcase, CalendarClock, Check, ChevronDown, ChevronUp, Copy, ExternalLink,
-  FileText, Loader2, MailCheck, PencilLine, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles,
+  FileText, Loader2, MailCheck, MessageSquareText, Wand2, PencilLine, Plus, RefreshCw, Search, Send, ShieldCheck, Sparkles,
   Trophy, Upload, X,
 } from 'lucide-react'
 import { api } from '../api'
 import { useLive } from '../live'
+import CvBuilder from '../components/CvBuilder'
 
 const COLUMNS = [
   { key: 'waiting', title: 'Waiting for you', statuses: ['ready', 'needs_info'], icon: Sparkles, tone: 'text-indigo-700' },
@@ -291,6 +292,7 @@ export default function Internships() {
   const [addBusy, setAddBusy] = useState(false)
   const [addErr, setAddErr] = useState(null)
   const [showOthers, setShowOthers] = useState(false)
+  const [cvOpen, setCvOpen] = useState(null)   // null | 'view' | 'chat'
 
   const load = () => api.get('/api/internships').then((d) => { setData(d); setError(null) }).catch((e) => setError(e.message))
   useEffect(() => { load() }, [tick])
@@ -335,7 +337,19 @@ export default function Internships() {
         )}
       </div>
 
-      {!p && <CvUpload onDone={load} />}
+      {!p && !cvOpen && (
+        <div className="grid md:grid-cols-2 gap-5">
+          <div className="card text-center py-10">
+            <MessageSquareText size={36} className="mx-auto text-brand" />
+            <h2 className="text-xl font-extrabold mt-3">No CV? Let the agent write it</h2>
+            <p className="text-slate-600 mt-1 max-w-md mx-auto">It asks you about your studies, projects and skills, one question at a time, then writes a clean CV as a Google Doc and PDF.</p>
+            <button className="btn-primary mt-5" onClick={() => setCvOpen('chat')}><Wand2 size={18} /> Build my CV with the agent</button>
+          </div>
+          <CvUpload onDone={load} />
+        </div>
+      )}
+
+      {cvOpen && <CvBuilder key={cvOpen} start={cvOpen === 'chat'} onClose={() => setCvOpen(null)} onChanged={load} />}
 
       {p && (
         <div className="card !py-4 flex gap-4 flex-wrap items-center">
@@ -350,7 +364,11 @@ export default function Internships() {
             <p>Searches: job emails · {data.web_search ? 'web' : <span title="Gemini Google Search isn't enabled on this API key">web (off)</span>} · job boards</p>
             <p>{data.last_run ? `Last search ${new Date(data.last_run * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} · runs daily` : 'Not searched yet'}</p>
           </div>
-          <CvUpload onDone={load} compact />
+          <div className="flex gap-2 flex-wrap">
+            <button className="btn-ghost !py-1.5" onClick={() => setCvOpen(cvOpen ? null : 'view')}><FileText size={18} /> {cvOpen ? 'Hide CV' : 'My CV'}</button>
+            <button className="btn-ghost !py-1.5" onClick={() => setCvOpen('chat')}><Wand2 size={18} /> Build / improve CV</button>
+            <CvUpload onDone={load} compact />
+          </div>
         </div>
       )}
 

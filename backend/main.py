@@ -20,7 +20,7 @@ import scheduler
 from activity_log import log
 import preflight
 import runs
-from agents import career_agent, chat_agent, coordinator, interview, planner_agent, voice_agent, watcher
+from agents import career_agent, chat_agent, cv_builder, coordinator, interview, planner_agent, voice_agent, watcher
 from tools import audit_tools as audit
 from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 from config import FRONTEND_URL, TIMEZONE
@@ -616,6 +616,53 @@ async def approve_follow_up(iid: str):
 async def internship_status(iid: str, status: str):
     try:
         return career_agent.set_status(iid, status)
+    except ValueError as e:
+        return _bad(e)
+
+
+class CvTurnIn(BaseModel):
+    messages: list[dict] = []
+    finish: bool = False
+
+
+class InstructionIn(BaseModel):
+    instruction: str
+
+
+@app.post("/api/cv/interview")
+async def cv_interview(body: CvTurnIn):
+    return await run(cv_builder.next_turn, body.messages, body.finish)
+
+
+@app.get("/api/cv")
+async def cv_draft():
+    d = cv_builder.get_draft()
+    return {"draft": d, "has_pdf": career_agent.CV_PATH.exists(),
+            "pdf_version": int(career_agent.CV_PATH.stat().st_mtime) if career_agent.CV_PATH.exists() else 0}
+
+
+@app.get("/api/cv/pdf")
+async def cv_pdf():
+    if not career_agent.CV_PATH.exists():
+        return JSONResponse({"error": "No CV yet"}, status_code=404)
+    prof = career_agent.profile() or {}
+    name = "".join(ch if ch.isalnum() else "_" for ch in (prof.get("name") or "My")).strip("_") + "_CV.pdf"
+    return FileResponse(career_agent.CV_PATH, media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+@app.post("/api/cv/edit")
+async def cv_edit(body: InstructionIn):
+    try:
+        return await run(cv_builder.ai_edit, body.instruction)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.post("/api/cv/sync")
+async def cv_sync():
+    try:
+        return await run(cv_builder.sync_from_doc)
     except ValueError as e:
         return _bad(e)
 
