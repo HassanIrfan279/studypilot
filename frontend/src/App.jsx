@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { BookOpenCheck, CalendarDays, Plane, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
+import { BookOpenCheck, Briefcase, CalendarDays, Plane, LayoutDashboard, ListChecks, RefreshCw, ShieldCheck, UserRound, Volume2, X } from 'lucide-react'
 import { api, loginUrl } from './api'
 import { LiveProvider, useLive } from './live'
 import ActivityLog from './components/ActivityLog'
@@ -16,6 +16,7 @@ import CalendarPage from './pages/CalendarPage'
 import Onboarding from './pages/Onboarding'
 import Notes from './pages/Notes'
 import Preflight from './pages/Preflight'
+import Internships from './pages/Internships'
 import ErrorBoundary from './components/ErrorBoundary'
 
 function Logo({ className = '' }) {
@@ -85,7 +86,7 @@ function Shell({ me }) {
   const location = useLocation()
   const nav =({ isActive }) =>
     `inline-flex items-center gap-2 px-3 py-2 rounded-xl font-semibold whitespace-nowrap transition ${isActive ? 'bg-white text-brand' : 'text-indigo-100 hover:bg-white/10'}`
-  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding' || location.pathname.startsWith('/notes') || location.pathname === '/preflight'
+  const wide = location.pathname === '/calendar' || location.pathname === '/onboarding' || location.pathname.startsWith('/notes') || location.pathname === '/preflight' || location.pathname === '/internships'
 
   const syncNow = async () => {
     setSyncing(true)
@@ -96,13 +97,14 @@ function Shell({ me }) {
     <div className="min-h-screen">
       <header className="bg-brand text-white sticky top-0 z-40 shadow-md">
         <div className="max-w-[1680px] mx-auto px-6 h-[68px] flex items-center gap-4">
-          <Link to="/"><Logo className="text-2xl" /></Link>
-          <nav className="flex gap-1 ml-4">
-            <NavLink to="/" end className={nav}><LayoutDashboard size={19} />Dashboard</NavLink>
-            <NavLink to="/calendar" className={nav}><CalendarDays size={19} />Calendar</NavLink>
-            <NavLink to="/plan" className={nav}><ListChecks size={19} />Study plan</NavLink>
-            <NavLink to="/onboarding" className={nav}><UserRound size={19} />About me</NavLink>
-            <NavLink to="/preflight" className={nav} title="Pre-flight check before the demo"><Plane size={19} />Check</NavLink>
+          <Link to="/" className="shrink-0"><Logo className="text-2xl" /></Link>
+          <nav className="flex gap-1 ml-2 lg:ml-4 min-w-0 overflow-x-auto">
+            <NavLink to="/" end className={nav}><LayoutDashboard size={19} /><span className="hidden lg:inline">Dashboard</span></NavLink>
+            <NavLink to="/calendar" className={nav}><CalendarDays size={19} /><span className="hidden lg:inline">Calendar</span></NavLink>
+            <NavLink to="/plan" className={nav}><ListChecks size={19} /><span className="hidden lg:inline">Study plan</span></NavLink>
+            <NavLink to="/internships" className={nav}><Briefcase size={19} /><span className="hidden lg:inline">Internships</span></NavLink>
+            <NavLink to="/onboarding" className={nav}><UserRound size={19} /><span className="hidden lg:inline">About me</span></NavLink>
+            <NavLink to="/preflight" className={nav} title="Pre-flight check before the demo"><Plane size={19} /><span className="hidden lg:inline">Check</span></NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <span className={`hidden 2xl:flex text-sm font-semibold items-center gap-2 whitespace-nowrap ${connected ? 'text-emerald-200' : 'text-amber-200'}`}>
@@ -122,7 +124,7 @@ function Shell({ me }) {
         <div className="bg-amber-100 border-b border-amber-300 text-amber-950">
           <div className="max-w-[1680px] mx-auto px-6 py-2.5 flex items-center gap-3 flex-wrap">
             <ShieldCheck size={20} />
-            <span className="font-semibold">StudyPilot can now read class emails and organize your Drive notes. Sign in once more to allow it.</span>
+            <span className="font-semibold">StudyPilot can now read class emails, organize your Drive notes and prepare internship applications as Gmail drafts (it never sends). Sign in once more to allow it.</span>
             <a href={loginUrl} className="btn-primary !py-1.5 ml-auto">Sign in again</a>
           </div>
         </div>
@@ -150,6 +152,7 @@ function Shell({ me }) {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/notes/:id" element={<Notes />} />
             <Route path="/preflight" element={<Preflight />} />
+            <Route path="/internships" element={<Internships />} />
           </Routes>
           </ErrorBoundary>
         </main>

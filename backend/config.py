@@ -79,6 +79,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/drive.file",        # create the StudyPilot folder + notes only
     "https://www.googleapis.com/auth/gmail.readonly",    # read class emails, never send
+    "https://www.googleapis.com/auth/gmail.compose",     # internship applications as DRAFTS; the student presses Send
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.readonly",
 ]

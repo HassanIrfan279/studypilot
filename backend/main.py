@@ -1,5 +1,6 @@
 """StudyPilot backend: FastAPI routes + WebSockets. Run with:  uvicorn main:app --reload --port 8000"""
 import asyncio
+import time
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -19,7 +20,7 @@ import scheduler
 from activity_log import log
 import preflight
 import runs
-from agents import chat_agent, coordinator, interview, planner_agent, voice_agent, watcher
+from agents import career_agent, chat_agent, coordinator, interview, planner_agent, voice_agent, watcher
 from tools import audit_tools as audit
 from tools import notify as tg  # WhatsApp (Twilio) + Telegram
 from config import FRONTEND_URL, TIMEZONE
@@ -514,6 +515,115 @@ async def ws_activity(ws: WebSocket):
 @app.websocket("/ws/voice")
 async def ws_voice(ws: WebSocket):
     await voice_agent.voice_session(ws)
+
+
+# ---------- internships (career agent) ----------
+class CvIn(BaseModel):
+    pdf_base64: str
+
+
+class TextIn(BaseModel):
+    text: str = ""
+    url: str = ""
+
+
+class AnswerIn(BaseModel):
+    question: str
+    answer: str
+
+
+class AppEditIn(BaseModel):
+    cover_letter: str | None = None
+    subject: str | None = None
+    instruction: str | None = None
+
+
+def _bad(e):
+    return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.get("/api/internships")
+async def internships():
+    return {"profile": career_agent.profile(), "items": career_agent.all_items(),
+            "answers": db.kv_get("career_answers") or {}, "can_draft": career_agent.has_compose(),
+            "last_run": db.kv_get("career_last_run"),
+            "web_search": (db.kv_get("career_web_off_until") or 0) < time.time()}
+
+
+@app.post("/api/internships/cv")
+async def upload_cv(body: CvIn):
+    import base64
+    try:
+        data = base64.b64decode(body.pdf_base64.split(",")[-1])
+        if len(data) > 8_000_000:
+            return _bad("CV is too large (max 8 MB).")
+        return await run(career_agent.save_cv, data)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.patch("/api/internships/profile")
+async def patch_career_profile(body: dict):
+    return career_agent.update_profile(body)
+
+
+@app.post("/api/internships/answer")
+async def answer_career_question(body: AnswerIn):
+    return career_agent.answer_gap(body.question, body.answer)
+
+
+@app.post("/api/internships/run")
+async def run_internships():
+    asyncio.create_task(run(career_agent.run, True))
+    return {"started": True}
+
+
+@app.post("/api/internships/add")
+async def add_internship(body: TextIn):
+    try:
+        return await run(career_agent.add_manual, body.text, body.url)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.post("/api/internships/{iid}/write")
+async def write_internship(iid: str, body: AppEditIn):
+    return await run(career_agent.write_application, iid, body.instruction or "")
+
+
+@app.patch("/api/internships/{iid}/app")
+async def edit_internship_app(iid: str, body: AppEditIn):
+    return career_agent.edit_application(iid, body.cover_letter, body.subject)
+
+
+@app.post("/api/internships/{iid}/approve")
+async def approve_internship(iid: str):
+    try:
+        return await run(career_agent.approve, iid)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.post("/api/internships/{iid}/follow-up")
+async def approve_follow_up(iid: str):
+    try:
+        return await run(career_agent.approve_follow_up, iid)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.post("/api/internships/{iid}/status/{status}")
+async def internship_status(iid: str, status: str):
+    try:
+        return career_agent.set_status(iid, status)
+    except ValueError as e:
+        return _bad(e)
+
+
+@app.post("/api/internships/track")
+async def track_internships():
+    await run(career_agent.track)
+    return {"ok": True}
 
 
 # ---------- deployed: serve the built React app from the same server ----------

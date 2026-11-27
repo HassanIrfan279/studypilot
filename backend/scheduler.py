@@ -6,11 +6,24 @@ from zoneinfo import ZoneInfo
 
 import db
 from activity_log import log
-from agents import coordinator, sync_agent, watcher
+from agents import career_agent, coordinator, sync_agent, watcher
 from auth import get_credentials
 from config import SYNC_INTERVAL_SECONDS, TIMEZONE
 
 _lock = threading.Lock()
+_career_busy = threading.Lock()
+
+
+def _career_tick():
+    """Internship agent: track replies ~every 10 min, search once a day. Own thread, own lock."""
+    if not _career_busy.acquire(blocking=False):
+        return
+    try:
+        career_agent.tick()
+    except Exception as e:
+        print(f"[Career] tick failed: {e}")
+    finally:
+        _career_busy.release()
 
 
 def _ago():
@@ -67,4 +80,5 @@ async def loop():
         if logged_in:
             await asyncio.to_thread(sync_once, first)
             first = False
+            threading.Thread(target=_career_tick, daemon=True).start()
         await asyncio.sleep(SYNC_INTERVAL_SECONDS)

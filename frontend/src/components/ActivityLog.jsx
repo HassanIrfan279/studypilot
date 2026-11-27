@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AgentRuns from './AgentRuns'
-import { BrainCircuit, CalendarClock, GraduationCap, Mic, RefreshCw } from 'lucide-react'
+import { BrainCircuit, Briefcase, CalendarClock, GraduationCap, Mic, RefreshCw } from 'lucide-react'
 import { useLive } from '../live'
 
 const AGENTS = {
@@ -9,6 +9,7 @@ const AGENTS = {
   Tutor: { icon: GraduationCap, cls: 'bg-violet-600 text-white' },
   Planner: { icon: CalendarClock, cls: 'bg-emerald-600 text-white' },
   Voice: { icon: Mic, cls: 'bg-pink-600 text-white' },
+  Career: { icon: Briefcase, cls: 'bg-amber-600 text-white' },
 }
 const LEVEL = {
   info: 'bg-white',

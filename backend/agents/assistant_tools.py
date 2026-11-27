@@ -137,7 +137,14 @@ def start_panic_mode(assessment_or_course: str, minutes_available: int = 120) ->
     return {"headline": sheet["headline"], "top_topics": sheet["top_topics"]}
 
 
-ALL_TOOLS = [get_upcoming_deadlines, get_daily_brief, explain_lecture, start_quiz, get_readiness,
+def internship_update() -> dict:
+    """Status of the student's internship hunt: applications waiting for approval, questions the
+    career agent needs answered, applications sent, interviews and offers."""
+    from agents import career_agent
+    return career_agent.summary()
+
+
+ALL_TOOLS = [internship_update, get_upcoming_deadlines, get_daily_brief, explain_lecture, start_quiz, get_readiness,
              list_study_sessions, move_study_session, replan_assessment, start_panic_mode]
 TOOLS_BY_NAME = {f.__name__: f for f in ALL_TOOLS}
 
