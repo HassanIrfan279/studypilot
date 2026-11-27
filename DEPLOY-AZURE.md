@@ -13,7 +13,7 @@ its **own resource group**, so it never touches your Fanout deployment. Step 12 
 
 **You need:**
 - portal.azure.com, signed in to the subscription that has your credits.
-- These files from `D:\claude\agentathon\studypilot\backend\`:
+- These files from `<your studypilot folder>\backend\`:
   - `.env`
   - `credentials.json`
   - `studypilot.db` (optional, to bring all your data)
@@ -109,7 +109,7 @@ Wait 2–4 minutes. It installs Docker, adds swap memory, and downloads StudyPil
 1. Open a **second PowerShell window** on your PC. Leave the server window open.
 2. Run, replacing YOUR-DOMAIN:
    ```powershell
-   cd D:\claude\agentathon\studypilot\backend
+   cd <your studypilot folder>\backend
    scp -i $HOME\Downloads\studypilot_key.pem .env credentials.json azureuser@YOUR-DOMAIN:~/
    ```
 3. Back in the **server** window, move them into place:
@@ -143,7 +143,7 @@ notes, plans, CV and internships.
 1. On your laptop, stop the backend (Ctrl+C in its window).
 2. In the **PC** PowerShell window:
    ```powershell
-   cd D:\claude\agentathon\studypilot\backend
+   cd <your studypilot folder>\backend
    scp -i $HOME\Downloads\studypilot_key.pem studypilot.db cv.pdf azureuser@YOUR-DOMAIN:~/
    ```
    (If you have no `cv.pdf`, leave it out of the command.)

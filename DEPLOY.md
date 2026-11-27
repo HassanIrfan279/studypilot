@@ -15,7 +15,7 @@ address may cost about $3–4 a month, which your $5 credit covers. Step 12 sets
 
 **You need:**
 - A browser signed in to the Google account that owns your Google Cloud project, the one with your OAuth client and billing.
-- These files from your PC, in `D:\claude\agentathon\studypilot\backend\`:
+- These files from your PC, in `<your studypilot folder>\backend\`:
   - `.env`
   - `credentials.json`
   - `studypilot.db` (optional, to bring all your data)
@@ -102,9 +102,9 @@ That's your free domain. sslip.io is a free service that points this name at you
 Secrets never go to GitHub; you upload them straight to your server.
 
 1. In the SSH window, click **UPLOAD FILE** (the up-arrow button at the top right).
-2. Select `D:\claude\agentathon\studypilot\backend\.env`.
+2. Select `<your studypilot folder>\backend\.env`.
    - If you can't see `.env`, type `.env` in the **File name** box and press Enter.
-3. Click **UPLOAD FILE** again and select `D:\claude\agentathon\studypilot\backend\credentials.json`.
+3. Click **UPLOAD FILE** again and select `<your studypilot folder>\backend\credentials.json`.
 4. Move both into place by pasting this and pressing Enter:
 
    ```bash
@@ -137,8 +137,8 @@ sometimes still being issued.
 notes, plans, CV and internships.
 
 1. **On your laptop:** close the backend window (Ctrl+C), so the database file is complete.
-2. In the SSH window: **UPLOAD FILE** → `D:\claude\agentathon\studypilot\backend\studypilot.db`
-3. Also **UPLOAD FILE** → `D:\claude\agentathon\studypilot\backend\cv.pdf`, if that file exists.
+2. In the SSH window: **UPLOAD FILE** → `<your studypilot folder>\backend\studypilot.db`
+3. Also **UPLOAD FILE** → `<your studypilot folder>\backend\cv.pdf`, if that file exists.
 4. Paste and press Enter:
    ```bash
    bash ~/studypilot/deploy/copy-data.sh
