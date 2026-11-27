@@ -84,7 +84,7 @@ export default function CalendarPage() {
         <FullCalendar
           ref={cal}
           plugins={[timeGridPlugin, dayGridPlugin, interactionPlugin]}
-          initialView="timeGridWeek"
+          initialView={window.innerWidth < 640 ? "timeGridDay" : "timeGridWeek"}
           headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek,dayGridMonth' }}
           firstDay={1}
           slotMinTime="07:00:00"

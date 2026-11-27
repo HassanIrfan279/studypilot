@@ -381,7 +381,7 @@ export default function Internships() {
       {p && (
         <div className="card !py-4 flex gap-4 flex-wrap items-center">
           <div className="flex-1 min-w-[18rem]">
-            <p className="font-bold">{p.name || 'Your profile'} · {[p.degree, p.semester && `semester ${p.semester}`, p.university].filter(Boolean).join(', ')}</p>
+            <p className="font-bold">{p.name || 'Your profile'} · {[p.degree, p.semester && (/semester/i.test(p.semester) ? p.semester : `semester ${p.semester}`), p.university].filter(Boolean).join(', ')}</p>
             <div className="flex gap-1.5 flex-wrap mt-2">
               {(p.preferred_roles || []).map((r) => <span key={r} className="text-sm font-semibold px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-900">{r}</span>)}
               {(p.skills || []).slice(0, 10).map((s) => <span key={s} className="text-sm px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700">{s}</span>)}

@@ -236,6 +236,12 @@ function Shell({ me }) {
                 <Route path="/internships" element={<Internships />} />
                 <Route path="/review/:id" element={<Review />} />
                 <Route path="/agents" element={<Agents />} />
+                <Route path="*" element={
+                  <div className="card text-center py-14">
+                    <p className="text-2xl font-extrabold">Page not found</p>
+                    <p className="text-slate-500 mt-1">That address isn't part of StudyPilot.</p>
+                    <Link to="/" className="btn-primary mt-5 inline-flex">Back to the dashboard</Link>
+                  </div>} />
               </Routes>
               </ErrorBoundary>
             </main>
