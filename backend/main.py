@@ -471,7 +471,16 @@ class EventIn(BaseModel):
 async def calendar_add(body: EventIn):
     ev = await run(cal.add_student_event, body.title, body.start, body.end)
     log("Planner", f"📅 You added '{body.title}' to your calendar. Checking it against your study plan…")
-    asyncio.create_task(run(watcher.check_clashes))  # agent reacts if it clashes with a session
+
+    async def check():
+        try:
+            if not await run(watcher.check_clashes):  # agent reacts if it clashes with a session
+                log("Planner", f"✅ '{body.title}' doesn't overlap any upcoming study session, "
+                               "so your plan stays as it is.")
+        except Exception as e:
+            log("Planner", f"Couldn't check '{body.title}' against your plan: {e}", "warn")
+        activity_log.refresh()
+    asyncio.create_task(check())
     return ev
 
 

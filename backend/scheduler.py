@@ -1,17 +1,45 @@
 """Background loop: every SYNC_INTERVAL_SECONDS, sync Classroom and let the Coordinator react."""
 import asyncio
+import queue
 import threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import db
-from activity_log import log
+from activity_log import log, refresh
 from agents import career_agent, coach, coordinator, sync_agent, watcher
 from auth import get_credentials
 from config import SYNC_INTERVAL_SECONDS, TIMEZONE
 
 _lock = threading.Lock()
 _career_busy = threading.Lock()
+_watch_busy = threading.Lock()
+
+# Agent reactions run on their own worker, in order, so Classroom keeps being polled every
+# SYNC_INTERVAL_SECONDS even while a 30-90 s agent run is in progress.
+_agent_queue = queue.Queue()
+
+
+def _agent_worker():
+    while True:
+        result = _agent_queue.get()
+        try:
+            coordinator.handle(result)
+        except Exception as e:
+            log("Coordinator", f"Couldn't finish reacting to the changes ({type(e).__name__}: {e}).", "warn")
+
+
+threading.Thread(target=_agent_worker, daemon=True, name="agent-worker").start()
+
+
+def _watch_tick():
+    """Calendar clashes + missed sessions. Own thread so a clash run never delays Classroom polling."""
+    if not _watch_busy.acquire(blocking=False):
+        return
+    try:
+        watcher.tick()
+    finally:
+        _watch_busy.release()
 
 
 _coach_busy = threading.Lock()
@@ -65,12 +93,13 @@ def sync_once(verbose=False):
         n = len(result["changes"])
         if n or verbose:
             log("Sync", f"Sync done: {n} change(s) found.", "success" if n else "info")
-        try:
-            coordinator.handle(result)
-        except Exception as e:
-            log("Coordinator", f"Couldn't finish reacting to the changes ({type(e).__name__}: {e}).",
-                "warn")
-        watcher.tick()  # react to the student's own calendar, missed sessions
+        if n:
+            refresh()  # new/moved deadlines show on screen right away; the agents react next
+        if n or result.get("first_run"):
+            if _agent_queue.qsize():
+                log("Coordinator", "Queued: I'll react to this as soon as the current run finishes.")
+            _agent_queue.put(result)
+        threading.Thread(target=_watch_tick, daemon=True).start()  # the student's own calendar, missed sessions
         if not db.kv_get("markers_synced"):
             coordinator.sync_deadline_markers()  # one-time: put existing deadlines in Calendar
             db.kv_set("markers_synced", True)

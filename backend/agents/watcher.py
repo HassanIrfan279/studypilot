@@ -44,12 +44,23 @@ def _claim(key):
 
 
 # ---------------- 1. calendar clashes ----------------
+_clash_lock = threading.Lock()
+
+
 def check_clashes():
+    """Returns how many NEW clashes were handled. One checker at a time (the add-event endpoint and
+    the background watcher can both call this), so a clash is never handled twice."""
+    with _clash_lock:
+        return _check_clashes()
+
+
+def _check_clashes():
     now = datetime.now(timezone.utc)
     sessions = db.query("SELECT * FROM sessions WHERE done=0 AND start>?", (now.isoformat(),))
     if not sessions:
-        return
+        return 0
     mine = cal.list_student_events(days=8)
+    handled = 0
     for s in sessions:
         s_start = datetime.fromisoformat(s["start"])
         s_end = datetime.fromisoformat(s["end"])
@@ -58,7 +69,9 @@ def check_clashes():
                 if not _claim(f"clash:{s['event_id']}:{ev['id']}"):
                     continue
                 _handle_clash(s, ev)
+                handled += 1
                 break
+    return handled
 
 
 def _handle_clash(s, ev):

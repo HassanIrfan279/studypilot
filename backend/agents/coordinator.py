@@ -170,10 +170,22 @@ def handle(result):
     if audit_notes:
         situation += ("\n\nThe auditor re-read the full source and raised these issues. If a date "
                       "looks wrong, ask the student before relying on it:\n" + "\n".join(audit_notes))
-    if AGENT_BRAIN and brain.think_and_act("classroom", _title(changes),
-                                           "Google Classroom just changed:\n" + situation):
-        return
-    _rule_based(changes)
+    if not (AGENT_BRAIN and brain.think_and_act("classroom", _title(changes),
+                                                "Google Classroom just changed:\n" + situation)):
+        _rule_based(changes)
+    _ensure_prep_packs(changes)
+
+
+def _ensure_prep_packs(changes):
+    """Whatever the agent decided, a new or moved deadline always has its prep pack ready."""
+    for c in changes:
+        it = c.get("item")
+        if c["type"] in ("added", "due_changed") and it and not db.cache_get(f"prep:{it['id']}"):
+            try:
+                st.build_prep_pack(it["id"])
+            except Exception as e:
+                log("Tutor", f"Prep pack for '{it['title']}' failed: {e}", "warn")
+    refresh()
 
 
 def _safe_warm_up():
