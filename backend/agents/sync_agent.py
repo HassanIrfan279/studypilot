@@ -71,6 +71,7 @@ def _fetch_course(c):
                         f"deadlines I already know ({type(e).__name__}).", "warn")
 
     seen, new_titles = set(), []
+    texts = [_norm(a["text"]) for a in anns]
     for d in found:
         prev = tracked.get(d["title"].lower())
         if d.get("status") == "cancelled":
@@ -78,6 +79,8 @@ def _fetch_course(c):
                 seen.add(prev["id"])  # tracked + clearly cancelled -> let it be removed
                 db.kv_set(f"cancel_reason:{prev['id']}", d.get("evidence", ""))
             continue
+        if not _still_posted({"title": d["title"], "description": d.get("evidence", "")}, texts):
+            continue  # nothing in the current posts backs it up (deleted post, or Gemini echoed an old one)
         item_id = prev["id"] if prev else f"ann-{c['id']}-{_slug(d['title'])}"
         if item_id in seen:
             continue  # Gemini listed the same deadline twice
@@ -94,7 +97,6 @@ def _fetch_course(c):
     # Safety net: never drop a tracked deadline just because Gemini skipped it once. Drop it only if
     # its source post is gone (the teacher deleted it): no current announcement holds its evidence
     # or its key words. Then the agents cancel it like any other removed deadline.
-    texts = [_norm(a["text"]) for a in anns]
     for r in tracked_rows:
         if r["id"] not in seen or not ok:
             if any(i["id"] == r["id"] for i in items):
