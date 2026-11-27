@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 import db
 import gemini
+import runs
 import google_clients as g
 from activity_log import announce, log, refresh
 from config import DATA_DIR, MODEL_CHAIN, TIMEZONE
@@ -48,6 +49,17 @@ db.execute("""CREATE TABLE IF NOT EXISTS internships (
     created REAL, updated REAL, applied_at REAL, followup_at REAL, timeline TEXT)""")
 
 _lock = threading.Lock()   # one pipeline run at a time
+_run_id = None             # current "Decisions" panel run while a search is going
+
+
+def _log(msg, level="info", kind=None):
+    """Live log + a step in the Decisions panel (when a search run is open)."""
+    log(AGENT, msg, level)
+    if _run_id:
+        try:
+            runs.step(_run_id, kind or {"success": "ok", "warn": "warn", "error": "warn"}.get(level, "act"), msg)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------- schemas
@@ -222,7 +234,7 @@ def save_cv(pdf_bytes: bytes):
     if not pdf_bytes.startswith(b"%PDF"):
         raise ValueError("Please upload your CV as a PDF.")
     CV_PATH.write_bytes(pdf_bytes)
-    log(AGENT, "📄 Reading your CV…")
+    _log("📄 Reading your CV…")
     about = db.kv_get("profile") or {}
     prof = gemini.generate_json(
         "Extract this student's career profile from the CV. Use ONLY what the CV says; leave a "
@@ -234,7 +246,7 @@ def save_cv(pdf_bytes: bytes):
         CareerProfile, parts=[gemini.file_part(pdf_bytes, "application/pdf")], system=SYSTEM)
     db.kv_set("career_profile", prof)
     db.kv_set("career_answers", db.kv_get("career_answers") or {})
-    log(AGENT, f"Profile ready: {len(prof['skills'])} skills, {len(prof['projects'])} projects. "
+    _log(f"Profile ready: {len(prof['skills'])} skills, {len(prof['projects'])} projects. "
                f"Looking for: {', '.join(prof['preferred_roles'][:3])}.", "success")
     refresh()
     return prof
@@ -309,7 +321,7 @@ def _from_gmail():
                 f"From: {hdr.get('from', '')}\nSubject: {hdr.get('subject', '')}\n\n{text[:6000]}\n\n"
                 f"LINKS:\n{numbered}", Postings, system=SYSTEM)
         except Exception as e:
-            log(AGENT, f"Couldn't read one job email ({type(e).__name__}).", "warn")
+            _log(f"Couldn't read one job email ({type(e).__name__}).", "warn")
             continue
         for p in res["postings"]:
             if not p["is_internship"]:
@@ -342,10 +354,10 @@ def _from_web(prof):
     except Exception as e:
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
             db.kv_set("career_web_off_until", _now() + 6 * 3600)
-            log(AGENT, "Web search isn't enabled on this Gemini API key yet (quota 0) — using job "
+            _log("Web search isn't enabled on this Gemini API key yet (quota 0) — using job "
                        "emails and job boards instead.", "warn")
         else:
-            log(AGENT, f"Web search failed ({type(e).__name__}); using other sources.", "warn")
+            _log(f"Web search failed ({type(e).__name__}); using other sources.", "warn")
         return []
     gm = r.candidates[0].grounding_metadata if r.candidates else None
     chunks = [c.web for c in (gm.grounding_chunks or [])] if gm else []
@@ -371,6 +383,49 @@ def _from_web(prof):
                 continue
         out.append({**p, "url": url, "source": "Web search"})
     return out
+
+
+def _from_bayt(prof):
+    """Bayt.com Pakistan search pages (robots.txt allows them): a few searches from the target roles."""
+    import html as _h
+    import urllib.robotparser as rp
+    UA = "Mozilla/5.0 (compatible; StudyPilot/1.0; student internship helper)"
+    robots = rp.RobotFileParser()
+    try:
+        robots.parse(requests.get("https://www.bayt.com/robots.txt", headers={"User-Agent": UA}, timeout=10).text.splitlines())
+    except requests.RequestException:
+        return []
+    slugs = []
+    for r in (prof.get("preferred_roles") or [])[:3] + ["internship", "trainee"]:
+        slug = re.sub(r"[^a-z0-9]+", "-", r.lower()).strip("-")
+        if slug and slug not in slugs:
+            slugs.append(slug)
+    cards, links = [], []
+    for slug in slugs[:5]:
+        url = f"https://www.bayt.com/en/pakistan/jobs/{slug}-jobs/"
+        if not robots.can_fetch(UA, url):
+            continue
+        try:
+            page = requests.get(url, headers={"User-Agent": UA}, timeout=15).text
+        except requests.RequestException:
+            continue
+        for card in re.findall(r"<li[^>]*data-js-job[^>]*>(.*?)</li>", page, flags=re.S):
+            m = re.search(r'href="(/en/pakistan/jobs/[^"]+-\d+/)"', card)
+            if not m or ("https://www.bayt.com" + m.group(1)) in links:
+                continue
+            links.append("https://www.bayt.com" + m.group(1))
+            text = re.sub(r"\s+", " ", _h.unescape(re.sub(r"<[^>]+>", " ", card))).strip()
+            cards.append(f"[{len(links) - 1}] {text[:450]}")
+        time.sleep(1)  # be gentle
+    if not cards:
+        return []
+    res = gemini.generate_json(
+        "These are job cards from Bayt.com Pakistan. Return each one as a posting; link_index is the "
+        "number in brackets. is_internship = true ONLY if the card itself says intern/internship, "
+        "trainee, graduate/fresh graduate, entry level or junior, or asks for 0-1 years; otherwise false.\n\n"
+        + "\n".join(cards[:45]), Postings, system=SYSTEM)
+    return [{**p, "url": links[p["link_index"]] if 0 <= p["link_index"] < len(links) else "", "source": "Bayt.com"}
+            for p in res["postings"] if p["is_internship"]]
 
 
 def _from_boards():
@@ -451,7 +506,7 @@ def add_manual(text: str = "", url: str = ""):
     new = _store(posts)
     if not new:
         return {"ok": True, "duplicate": True}
-    log(AGENT, f"➕ Added {posts[0]['title']} at {posts[0]['company']}. Judging the fit…")
+    _log(f"➕ Added {posts[0]['title']} at {posts[0]['company']}. Judging the fit…")
     _evaluate(new)
     it = get(new[0])
     if it["status"] == "shortlisted":
@@ -472,10 +527,15 @@ def _evaluate(ids):
     res = gemini.generate_json(
         "Decide which of these postings this student should apply to. Score 0-100 for real fit "
         "(skills/projects match, level suitable for their semester, location or remote, field). "
-        "decision: 'apply' (score >= 70 and genuinely worth it), 'maybe', or 'skip'. reasoning: "
+        "decision: 'apply' (score >= 65 and a real fit), 'maybe' (partly fits, e.g. on-site in another "
+        "city, slightly senior, or a stretch skill), or 'skip' ONLY for a different field, a clearly "
+        "wrong level (e.g. senior/lead, 3+ years required) or a scam. A different city, commuting or "
+        "upcoming exams are NEVER a reason to skip: mention them in timing_note instead. Treat on-site "
+        "roles in big cities near the student as fine unless they said otherwise. reasoning: "
         "2 short sentences naming the concrete match or mismatch, addressed to the student as 'you'. red_flags: scam signs (asks for "
         "a fee/deposit, vague company, personal Gmail recruiter + too-good pay), or level mismatch. "
-        "Any posting asking the student to pay must be 'skip'. timing_note: one line about the "
+        "A posting that is not clearly an internship, trainee or entry-level role can be at most "
+        "'maybe'. Any posting asking the student to pay must be 'skip'. timing_note: one line about the "
         f"deadline vs their upcoming exams ({_upcoming_exams()}), or \"\".\n\n"
         f"STUDENT:\n{_facts()}\n\nPOSTINGS:\n{listing}", Verdicts, system=SYSTEM)
     by_id = {i["id"]: i for i in items}
@@ -485,13 +545,17 @@ def _evaluate(ids):
         decision = v["decision"] if v["decision"] in ("apply", "maybe", "skip") else "maybe"
         if v["red_flags"] and any(w in " ".join(v["red_flags"]).lower() for w in ("fee", "deposit", "scam", "pay to")):
             decision = "skip"
+        entry_level = re.search(r"(?i)\b(intern|internship|trainee|graduate|fresh|entry|junior|apprentice)",
+                                by_id[v["id"]]["title"] + " " + (by_id[v["id"]]["description"] or "")[:400])
+        if decision == "apply" and not entry_level:
+            decision = "maybe"   # never auto-apply to a regular job
         status = {"apply": "shortlisted", "skip": "skipped"}.get(decision, "found")
         _set(v["id"], score=max(0, min(100, int(v["score"]))), decision=decision,
              reasoning=v["reasoning"], red_flags=v["red_flags"], timing_note=v["timing_note"], status=status)
         verb = {"apply": "✅ Will apply", "skip": "⏭ Skipping", "maybe": "🤔 Maybe"}[decision]
         _event(v["id"], f"{verb} ({v['score']}/100): {v['reasoning']}")
         it = by_id[v["id"]]
-        log(AGENT, f"{verb}: {it['title']} at {it['company']} — {v['score']}/100. {v['reasoning']}",
+        _log(f"{verb}: {it['title']} at {it['company']} — {v['score']}/100. {v['reasoning']}",
             "success" if decision == "apply" else "info")
 
 
@@ -500,14 +564,14 @@ def _safe_write(iid):
     try:
         write_application(iid)
     except Exception as e:
-        log(AGENT, f"Couldn't write the application ({type(e).__name__}: {str(e)[:120]}).", "error")
+        _log(f"Couldn't write the application ({type(e).__name__}: {str(e)[:120]}).", "error")
 
 
 def write_application(iid, instruction=""):
     it = get(iid)
     if not it:
         return None
-    log(AGENT, f"✍️ Writing the application for {it['title']} at {it['company']}…")
+    _log(f"✍️ Writing the application for {it['title']} at {it['company']}…")
     method = "email" if it.get("apply_email") else "portal"
     res = gemini.generate_json(
         f"Write this student's application for the posting below. Apply method: {method}. "
@@ -531,10 +595,10 @@ def write_application(iid, instruction=""):
          status="needs_info" if open_q else "ready")
     if open_q:
         _event(iid, "Needs your input: " + " / ".join(open_q))
-        log(AGENT, f"❓ To finish {it['company']} I need: {' / '.join(open_q)}", "warn")
+        _log(f"❓ To finish {it['company']} I need: {' / '.join(open_q)}", "warn")
     else:
         _event(iid, "Application written — waiting for your approval")
-        log(AGENT, f"📝 Application for {it['title']} at {it['company']} is ready for your approval.", "success")
+        _log(f"📝 Application for {it['title']} at {it['company']} is ready for your approval.", "success")
     threading.Thread(target=_save_doc, args=(iid,), daemon=True).start()
     refresh()
     return get(iid)
@@ -573,7 +637,7 @@ def _save_doc(iid):
             media_body=media, fields="id,webViewLink").execute())
         _set(iid, doc_link=doc["webViewLink"])
     except Exception as e:
-        log(AGENT, f"Couldn't save the application to Drive ({type(e).__name__}).", "warn")
+        _log(f"Couldn't save the application to Drive ({type(e).__name__}).", "warn")
 
 
 # ---------------------------------------------------------------- approve (student-in-the-loop)
@@ -604,7 +668,7 @@ def approve(iid):
             draft_id, link = _draft(it["apply_email"], app["subject"], app["cover_letter"])
             _set(iid, draft_id=draft_id)
             _event(iid, "Approved — Gmail draft created with your CV attached. Press Send in Gmail.")
-            log(AGENT, f"📨 Draft ready in Gmail for {it['company']} (CV attached). Review and press Send — "
+            _log(f"📨 Draft ready in Gmail for {it['company']} (CV attached). Review and press Send — "
                        "I'll notice when it's sent.", "success")
             refresh()
             return {"method": "email", "open": link, "draft": True}
@@ -622,7 +686,7 @@ def mark_applied(iid):
     _set(iid, status="applied", applied_at=_now())
     it = get(iid)
     _event(iid, "Application sent ✅ — tracking replies in Gmail")
-    log(AGENT, f"✅ Applied: {it['title']} at {it['company']}. I'll watch Gmail for their reply.", "success")
+    _log(f"✅ Applied: {it['title']} at {it['company']}. I'll watch Gmail for their reply.", "success")
     refresh()
     return it
 
@@ -742,10 +806,10 @@ def _replies():
             notify.send("💼 StudyPilot: " + msg)
         elif kind == "rejection":
             _set(it["id"], status="rejected")
-            log(AGENT, f"{it['company']} said no for {it['title']}. That's normal — I'll keep looking and "
+            _log(f"{it['company']} said no for {it['title']}. That's normal — I'll keep looking and "
                        "weight similar roles lower.", "warn")
         elif kind == "acknowledgement":
-            log(AGENT, f"{it['company']} confirmed they received your application.", "info")
+            _log(f"{it['company']} confirmed they received your application.", "info")
     db.kv_set("career_seen_replies", list(seen | {m["id"] for m in msgs})[-500:])
     refresh()
 
@@ -766,7 +830,7 @@ def _follow_ups():
             app["follow_up"] = fu
             _set(it["id"], app=app, followup_at=_now())
             _event(it["id"], "No reply for 10 days — follow-up email written for your approval")
-            log(AGENT, f"⏰ No reply from {it['company']} in {FOLLOW_UP_AFTER_DAYS} days. I wrote a "
+            _log(f"⏰ No reply from {it['company']} in {FOLLOW_UP_AFTER_DAYS} days. I wrote a "
                        "follow-up — approve it on the Internships page.", "warn")
         except Exception:
             pass
@@ -789,32 +853,35 @@ def approve_follow_up(iid):
 # ---------------------------------------------------------------- the loop
 def run(force=False):
     """Full pipeline. Daily by itself, or when the student clicks 'Find internships now'."""
+    global _run_id
     if not _lock.acquire(blocking=False):
-        log(AGENT, "Already searching — hang on.")
+        _log("Already searching — hang on.")
         return {"busy": True}
     try:
         prof = profile()
+        if prof:
+            _run_id = runs.start("career", "Internship search")
         if not prof:
-            log(AGENT, "Upload your CV on the Internships page so I know what to look for.", "warn")
+            _log("Upload your CV on the Internships page so I know what to look for.", "warn")
             return {"needs_cv": True}
-        log(AGENT, "🔎 Looking for internships that fit you: job emails, web, job boards…")
+        _log("🔎 Looking for internships that fit you: job emails, web, Bayt.com, remote boards…")
         found = []
         for name, fn in (("job emails", _from_gmail), ("web search", lambda: _from_web(prof)),
-                         ("job boards", _from_boards)):
+                         ("Bayt.com Pakistan", lambda: _from_bayt(prof)), ("remote job boards", _from_boards)):
             try:
                 got = fn()
                 found += got
                 if got:
-                    log(AGENT, f"Found {len(got)} posting(s) in {name}.")
+                    _log(f"Found {len(got)} posting(s) in {name}.")
             except Exception as e:
-                log(AGENT, f"Couldn't search {name} ({type(e).__name__}); continuing.", "warn")
+                _log(f"Couldn't search {name} ({type(e).__name__}); continuing.", "warn")
         new = _store(found)
-        log(AGENT, f"{len(new)} new posting(s) to judge." if new else "No new postings since last time.")
+        _log(f"{len(new)} new posting(s) to judge." if new else "No new postings since last time.")
         for i in range(0, len(new), 12):
             try:
                 _evaluate(new[i:i + 12])
             except Exception as e:
-                log(AGENT, f"Couldn't judge some postings ({type(e).__name__}).", "warn")
+                _log(f"Couldn't judge some postings ({type(e).__name__}).", "warn")
         # Write applications for the best shortlisted ones (selective on purpose)
         todo = db.query("SELECT id FROM internships WHERE status='shortlisted' ORDER BY score DESC LIMIT ?",
                         (MAX_NEW_APPS_PER_RUN,))
@@ -828,8 +895,17 @@ def run(force=False):
             announce(msg)
             notify.send("💼 StudyPilot: " + msg)
         refresh()
+        shortlisted = db.one("SELECT COUNT(*) n FROM internships WHERE status IN ('ready','needs_info','shortlisted')")["n"]
+        if _run_id:
+            runs.finish(_run_id, "done", f"{len(new)} new posting(s) judged · {len(todo)} application(s) written · "
+                                         f"{shortlisted} waiting for you")
         return {"new": len(new), "written": len(todo)}
+    except Exception as e:
+        if _run_id:
+            runs.finish(_run_id, "fallback", f"Search stopped: {type(e).__name__}")
+        raise
     finally:
+        _run_id = None
         _lock.release()
 
 

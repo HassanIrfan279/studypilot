@@ -282,7 +282,7 @@ function Card({ it, open, onToggle, canDraft, reload }) {
 }
 
 export default function Internships() {
-  const { tick } = useLive()
+  const { tick, logs } = useLive()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [open, setOpen] = useState(null)
@@ -361,7 +361,7 @@ export default function Internships() {
             </div>
           </div>
           <div className="text-sm text-slate-600 space-y-1">
-            <p>Searches: job emails · {data.web_search ? 'web' : <span title="Gemini Google Search isn't enabled on this API key">web (off)</span>} · job boards</p>
+            <p>Searches: job emails · Bayt.com Pakistan · remote boards · {data.web_search ? 'web' : <span title="Gemini Google Search isn't enabled on this API key">web (off)</span>}</p>
             <p>{data.last_run ? `Last search ${new Date(data.last_run * 1000).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} · runs daily` : 'Not searched yet'}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -371,6 +371,26 @@ export default function Internships() {
           </div>
         </div>
       )}
+
+      {p && (() => {
+        const feed = (logs || []).filter((l) => l.agent === 'Career').slice(-6).reverse()
+        if (!feed.length) return null
+        return (
+          <div className="card !py-4">
+            <h2 className="font-extrabold flex items-center gap-2 mb-2">
+              {searching ? <Loader2 size={18} className="animate-spin text-brand" /> : <Sparkles size={18} className="text-brand" />}
+              What the agent is doing
+            </h2>
+            <ul className="space-y-1.5">
+              {feed.map((l) => (
+                <li key={l.id} className={`text-sm rounded-lg px-3 py-1.5 ${l.level === 'warn' ? 'bg-amber-50 text-amber-950' : l.level === 'success' ? 'bg-emerald-50 text-emerald-950' : l.level === 'error' ? 'bg-red-50 text-red-900' : 'bg-slate-50 text-slate-800'}`}>
+                  <span className="tabular text-slate-400 mr-2">{new Date(l.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>{l.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })()}
 
       <Questions questions={questions} onAnswered={load} />
 
