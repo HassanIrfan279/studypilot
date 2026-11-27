@@ -125,7 +125,13 @@ def plan_sessions(item_id: str) -> dict:
 
 
 def clear_sessions(item_id: str) -> dict:
-    """Remove all future StudyPilot study sessions for a deadline (e.g. it was cancelled)."""
+    """Remove all future StudyPilot study sessions for a deadline that was CANCELLED or is over.
+    Refused for a deadline that is still coming up: move or re-plan those sessions instead."""
+    item = st.get_item(item_id)
+    if item and item.get("active") and item.get("due") and \
+            datetime.fromisoformat(item["due"]) > datetime.now(timezone.utc):
+        return {"refused": "This deadline is still coming up, so its study time stays. If a session "
+                           "can't be moved, keep it and tell the student (notify_student) about the clash."}
     _say("act", "Planner is clearing study sessions")
     removed = 0
     for ev in cal.list_studypilot_events(item_id):
@@ -178,8 +184,10 @@ def move_session(event_id: str, new_start_iso: str) -> dict:
                 out["hint"] = (f"This session is {minutes} min long. The Reviewer already approved "
                                f"{slot[0]:%a %d %b %H:%M}: call move_session with that start.")
             else:
-                out["hint"] = ("No reviewer-approved slot before the deadline. Tell the student and "
-                               "suggest a shorter session or Panic mode.")
+                out["hint"] = ("No reviewer-approved slot before the deadline (those days are full). "
+                               "Do NOT delete the session. Leave it where it is and tell the student "
+                               "with notify_student: name the clash and suggest moving their event or "
+                               "using Panic mode.")
             return out
     _say("act", f"Planner is moving a session to {start.strftime('%a %H:%M')}")
     cal.move_study_event(event_id, start)
@@ -423,8 +431,9 @@ def _think_and_act(trigger: str, title: str, situation: str) -> bool:
                     runs.step(run_id, "ok", _short(out))
                 if fc.name == "notify_student":
                     notified = True
-                if (fc.name in ("move_session", "plan_sessions", "add_extra_session", "clear_sessions")
-                        and isinstance(out, dict) and not out.get("error") and not out.get("rejected_by_reviewer")):
+                if (fc.name in ("move_session", "plan_sessions", "add_extra_session")
+                        and isinstance(out, dict) and out.get("ok", fc.name != "move_session")
+                        and not out.get("error") and not out.get("rejected_by_reviewer")):
                     changed = True
                 replies.append(types.Part.from_function_response(name=fc.name, response={"result": out}))
             contents.append(types.Content(role="user", parts=replies))

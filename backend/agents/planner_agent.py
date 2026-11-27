@@ -39,23 +39,37 @@ def _round_up(dt):
     return (dt + timedelta(minutes=extra)).replace(second=0, microsecond=0)
 
 
+def _day_minutes(day):
+    """Minutes of StudyPilot study already booked on a local date (same rule the Reviewer uses)."""
+    rows = db.query("SELECT start, end FROM sessions WHERE substr(start,1,10)=?", (day.isoformat(),))
+    return sum((datetime.fromisoformat(r["end"]) - datetime.fromisoformat(r["start"])).total_seconds() / 60
+               for r in rows)
+
+
 def _pick(slots, n, length, one_per_day=True):
-    """Pick n sessions, working backward from the deadline, spread over different days."""
-    chosen, used_days = [], set()
+    """Pick n sessions, working backward from the deadline, spread over different days.
+    Follows the Reviewer's rules: a break around other events and at most 6h of study a day."""
+    from agents import coach  # learned from which sessions the student actually completes
+    chosen, used_days, added = [], set(), {}
+    brk = timedelta(minutes=coach.MIN_BREAK)
     for s, e in sorted(slots, key=lambda x: x[0], reverse=True):
         if len(chosen) >= n:
             break
-        if one_per_day and s.date() in used_days:
+        local_day = s.astimezone(coach.TZ).date()
+        if one_per_day and local_day in used_days:
             continue
+        if _day_minutes(local_day) + added.get(local_day, 0) + length > coach.MAX_DAY_MIN:
+            continue  # that day is already full
+        s, e = s + brk, e - brk  # leave a break next to whatever is before/after this free time
         need = timedelta(minutes=length)
-        from agents import coach  # learned from which sessions the student actually completes
         start = max(s, s.replace(hour=coach.preferred_hour(PREFERRED_START_HOUR), minute=0, second=0, microsecond=0))
         start = _round_up(start)
         if start + need > e:
             start = _round_up(s)  # evening doesn't fit, use the start of the free slot
         if start + need <= e:
             chosen.append((start, start + need))
-            used_days.add(s.date())
+            used_days.add(local_day)
+            added[local_day] = added.get(local_day, 0) + length
     return chosen
 
 
