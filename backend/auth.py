@@ -12,6 +12,31 @@ from config import CLIENT_SECRETS, OAUTH_REDIRECT_URI, SCOPES
 _pending = {}  # state -> PKCE code_verifier, kept between /login and /callback
 
 
+class NotOwner(Exception):
+    """Someone other than the owner tried to sign in. StudyPilot is one student's personal agent."""
+
+
+def _email(creds) -> str:
+    from googleapiclient.discovery import build
+    svc = build("oauth2", "v2", credentials=creds, cache_discovery=False)
+    return (svc.userinfo().get().execute().get("email") or "").lower()
+
+
+def owner_email():
+    """The account this StudyPilot belongs to: OWNER_EMAIL env, else the first account that signed in."""
+    import os
+    return (os.getenv("OWNER_EMAIL") or db.kv_get("owner_email") or "").lower() or None
+
+
+def _revoke(creds):
+    import requests
+    try:
+        requests.post("https://oauth2.googleapis.com/revoke", params={"token": creds.token},
+                      headers={"content-type": "application/x-www-form-urlencoded"}, timeout=10)
+    except Exception:
+        pass
+
+
 def _flow(state=None):
     return Flow.from_client_secrets_file(CLIENT_SECRETS, scopes=SCOPES,
                                          redirect_uri=OAUTH_REDIRECT_URI, state=state)
@@ -39,7 +64,20 @@ def handle_callback(full_url: str, state: str):
                and "userinfo" not in s
                and s.split("/")[-1] not in short
                and aliases.get(s.split("/")[-1]) not in short]
+    # Owner lock: only the student this StudyPilot belongs to may sign in. Checked BEFORE saving,
+    # so a stranger signing in can never replace (or sign out) the owner's account.
+    email = _email(flow.credentials)
+    owner = owner_email()
+    if not owner and db.kv_get("token"):
+        current = get_credentials()
+        owner = _email(current) if current else None
+    if owner and email != owner:
+        _revoke(flow.credentials)
+        raise NotOwner(email)
+    if missing:
+        return missing  # nothing saved: the owner's existing sign-in stays as it was
     _save(flow.credentials)
+    db.kv_set("owner_email", email)
     import time
     db.kv_set("token_issued", time.time())
     db.execute("DELETE FROM kv WHERE key='signin_warned'")

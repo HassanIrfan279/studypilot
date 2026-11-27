@@ -78,21 +78,18 @@ def login():
 
 @app.get("/auth/callback")
 async def callback(request: Request, state: str = ""):
-    missing = await run(auth.handle_callback, str(request.url), state)
+    try:
+        missing = await run(auth.handle_callback, str(request.url), state)
+    except auth.NotOwner:
+        log("Coordinator", "🔒 Someone else tried to sign in. Blocked: this StudyPilot belongs to its owner.", "warn")
+        return RedirectResponse(f"{FRONTEND_URL}/?login_error=not_owner")
     if missing:
         log("Coordinator", "Sign-in is missing permissions (Classroom/Drive/Calendar boxes not "
                            "ticked). Asking the student to sign in again.", "error")
-        auth.logout()
         return RedirectResponse(f"{FRONTEND_URL}/?missing_scopes=1")
     log("Coordinator", "✅ Signed in with Google. Starting first sync…", "success")
     asyncio.create_task(run(scheduler.sync_once, True))
     return RedirectResponse(FRONTEND_URL)
-
-
-@app.post("/auth/logout")
-def logout():
-    auth.logout()
-    return {"ok": True}
 
 
 @app.get("/api/me")

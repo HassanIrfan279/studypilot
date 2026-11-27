@@ -265,10 +265,33 @@ export default function App() {
 
   if (error) return <div className="p-10 text-xl text-red-800">{error}</div>
   if (!me) return <div className="p-10 text-xl text-slate-600">Loading StudyPilot…</div>
-  if (!me.logged_in) return <Login />
+  if (!me.logged_in) return <><NotOwnerBanner /><Login /></>
   return (
     <LiveProvider>
+      <NotOwnerBanner />
       <Shell me={me} />
     </LiveProvider>
+  )
+}
+
+// Shown when someone other than the owner tried to sign in (owner lock on the server)
+function NotOwnerBanner() {
+  const [show, setShow] = useState(() => new URLSearchParams(window.location.search).get('login_error') === 'not_owner')
+  if (!show) return null
+  return (
+    <div role="alert" className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[94%] max-w-2xl slide-in">
+      <div className="rounded-2xl bg-slate-900 text-white shadow-2xl p-5 flex gap-4 items-start ring-1 ring-white/10">
+        <ShieldCheck size={26} className="text-indigo-300 shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <p className="font-extrabold text-lg">This is a personal StudyPilot</p>
+          <p className="text-slate-300 mt-1">
+            Each student runs their own private agent, which holds their own Google sign-in and works only for them.
+            Your account was not connected, and nothing was changed. You're seeing the owner's demo.
+          </p>
+        </div>
+        <button onClick={() => { setShow(false); window.history.replaceState(null, '', window.location.pathname) }}
+          className="text-slate-400 hover:text-white p-1" aria-label="Dismiss"><X size={20} /></button>
+      </div>
+    </div>
   )
 }
