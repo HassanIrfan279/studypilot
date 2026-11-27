@@ -153,7 +153,8 @@ def add_extra_session(item_id: str, minutes: int, focus: str) -> dict:
 
 def move_session(event_id: str, new_start_iso: str) -> dict:
     """Move one StudyPilot study session to a new start time (local time, e.g. 2026-11-28T20:00).
-    Use find_free_slot first to pick a time that does not clash."""
+    Use find_free_slot first with the session's FULL length in minutes. If the Reviewer rejects the
+    time, the reply contains suggested_start_iso: an approved slot to use instead."""
     start = datetime.fromisoformat(new_start_iso)
     if start.tzinfo is None:
         start = start.replace(tzinfo=TZ)
@@ -161,10 +162,25 @@ def move_session(event_id: str, new_start_iso: str) -> dict:
     row = db.one("SELECT * FROM sessions WHERE event_id=?", (event_id,))
     if row:
         length = datetime.fromisoformat(row["end"]) - datetime.fromisoformat(row["start"])
-        verdict = coach.reviewer_check(start, start + length, st.get_item(row["assessment_id"]), ignore_event=event_id)
+        item = st.get_item(row["assessment_id"])
+        verdict = coach.reviewer_check(start, start + length, item, ignore_event=event_id)
         if not verdict["ok"]:
-            return {"rejected_by_reviewer": verdict["reasons"],
-                    "hint": "Pick a different time with find_free_slot (later in the day or another day)."}
+            minutes = int(length.total_seconds() // 60)
+            out = {"rejected_by_reviewer": verdict["reasons"], "session_minutes": minutes}
+            # Do the search for the agent: the nearest slot of the session's FULL length that the
+            # Reviewer approves, before the deadline (asking for a shorter slot is the usual mistake).
+            due = (datetime.fromisoformat(item["due"]).astimezone(TZ) if item and item.get("due")
+                   else start + timedelta(days=4))
+            slot = coach.reviewed_slot(minutes, max(start - timedelta(hours=6), datetime.now(TZ) + timedelta(minutes=30)),
+                                       due - timedelta(minutes=30), item)
+            if slot:
+                out["suggested_start_iso"] = slot[0].strftime("%Y-%m-%dT%H:%M")
+                out["hint"] = (f"This session is {minutes} min long. The Reviewer already approved "
+                               f"{slot[0]:%a %d %b %H:%M}: call move_session with that start.")
+            else:
+                out["hint"] = ("No reviewer-approved slot before the deadline. Tell the student and "
+                               "suggest a shorter session or Panic mode.")
+            return out
     _say("act", f"Planner is moving a session to {start.strftime('%a %H:%M')}")
     cal.move_study_event(event_id, start)
     return {"ok": True, "new_start": start.strftime("%a %d %b %H:%M")}
@@ -364,7 +380,7 @@ def _think_and_act(trigger: str, title: str, situation: str) -> bool:
         system_instruction=SYSTEM, temperature=0.2,
         tools=[types.Tool(function_declarations=decls)],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
-    notified, summary, acted = False, "", False
+    notified, summary, acted, changed = False, "", False, False
     started = time.time()
     config.http_options = types.HttpOptions(timeout=25_000)
     try:
@@ -404,11 +420,21 @@ def _think_and_act(trigger: str, title: str, situation: str) -> bool:
                     runs.step(run_id, "ok", _short(out))
                 if fc.name == "notify_student":
                     notified = True
+                if (fc.name in ("move_session", "plan_sessions", "add_extra_session", "clear_sessions")
+                        and isinstance(out, dict) and not out.get("error") and not out.get("rejected_by_reviewer")):
+                    changed = True
                 replies.append(types.Part.from_function_response(name=fc.name, response={"result": out}))
             contents.append(types.Content(role="user", parts=replies))
         if not notified and acted:
-            notify_student(summary[:300] if summary else f"I handled it: {title}.")
-        runs.finish(run_id, "done", summary or "Done.")
+            if summary:
+                notify_student(summary[:300])
+            elif changed:
+                notify_student(f"I updated your plan for: {title}.")
+            else:
+                summary = (f"I looked into “{title}” but couldn't find a time that passes my checks, "
+                           "so I left your calendar as it is. Please pick a new time on the calendar page.")
+                notify_student(summary)
+        runs.finish(run_id, "done", summary or ("Plan updated." if changed else "Checked: no changes needed."))
         db.cache_delete("brief")
         refresh()
         return True
