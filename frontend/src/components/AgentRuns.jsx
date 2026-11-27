@@ -62,7 +62,12 @@ function RunCard({ run, open, onToggle }) {
             return (
               <li key={s.id} className={`slide-in flex gap-2.5 rounded-lg px-2.5 py-2 text-[14.5px] leading-snug ${st.cls}`}>
                 <SIcon size={16} className="shrink-0 mt-0.5" />
-                <span className={s.kind === 'ok' ? 'font-mono text-[12.5px] break-all opacity-80' : ''}>{s.text}</span>
+                <span className={s.kind === 'ok' && !s.text.startsWith('Connected to the StudyPilot MCP') ? 'font-mono text-[12.5px] break-all opacity-80' : ''}>
+                  {s.text.startsWith('MCP → ') ? <>
+                    <span title="Called on StudyPilot's MCP server (tools/call)" className="mr-1.5 inline-block rounded-md bg-violet-600 px-1.5 py-px text-[11px] font-bold tracking-wide text-white align-[1px]">MCP</span>
+                    {s.text.slice(6)}
+                  </> : s.text}
+                </span>
               </li>
             )
           })}

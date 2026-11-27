@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 import activity_log
 import auth
+import mcp_server
 import db
 import scheduler
 from activity_log import log
@@ -37,7 +38,8 @@ async def lifespan(app):
     task = asyncio.create_task(scheduler.loop()) if BACKGROUND_AGENT else None
     if not BACKGROUND_AGENT:
         print("[StudyPilot] BACKGROUND_AGENT=false: web app only, no background agents in this copy.")
-    yield
+    async with mcp_server.mcp.session_manager.run():  # the agents' MCP tool server, at /mcp/
+        yield
     if task:
         task.cancel()
     # Background Google/Gemini calls run in worker threads; don't wait for them on Ctrl-C
@@ -45,6 +47,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="StudyPilot", lifespan=lifespan)
+app.mount("/mcp", mcp_server.asgi_app)  # MCP server (Streamable HTTP) the Coordinator agent calls its tools on
 app.add_middleware(CORSMiddleware, allow_origins=[FRONTEND_URL, "http://127.0.0.1:5173"],
                    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 

@@ -6,6 +6,8 @@ results, verifies its own work in Google Calendar, and tells the student what it
 Each thought and action is streamed to the UI. If Gemini fails, the caller falls back to
 the fixed rule-based pipeline, so the student is never left without a plan.
 """
+import asyncio
+import os
 import time
 import json
 import threading
@@ -28,6 +30,12 @@ TZ = ZoneInfo(TIMEZONE)
 MAX_STEPS = 14
 RUN_BUDGET = 90  # seconds: a single agent run can never block the demo for long
 _ctx = threading.local()  # which run the tools are reporting to
+_current = {"run": None}  # the run in progress (runs are serialized), for tools called via MCP
+MCP_URL = os.getenv("MCP_URL", f"http://127.0.0.1:{os.getenv('PORT', '8000')}/mcp/")
+
+
+def current_run():
+    return _current["run"]
 
 
 def _fmt(iso):
@@ -286,6 +294,39 @@ def _decls():
             for f in TOOLS]
 
 
+# =====================  MCP: the agent reaches its tools through StudyPilot's MCP server  =====================
+async def _mcp(fn):
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+    async with streamablehttp_client(MCP_URL, timeout=10, sse_read_timeout=150) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            return await fn(session)
+
+
+def mcp_discover():
+    """tools/list on the MCP server -> Gemini function declarations (schemas come from the server)."""
+    async def go(session):
+        return (await session.list_tools()).tools
+    tools = asyncio.run(_mcp(go))
+    return [types.FunctionDeclaration(name=t.name, description=t.description or t.name,
+                                      parameters_json_schema=t.inputSchema) for t in tools]
+
+
+def mcp_call(name, args):
+    """tools/call on the MCP server; returns the tool's JSON result."""
+    async def go(session):
+        return await session.call_tool(name, args)
+    res = asyncio.run(_mcp(go))
+    text = "".join(getattr(c, "text", "") or "" for c in res.content)
+    if res.isError:
+        raise RuntimeError(text[:300] or "MCP tool error")
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
+
+
 def _short(v, n=180):
     s = json.dumps(v, ensure_ascii=False, default=str)
     return s if len(s) <= n else s[:n] + "…"
@@ -309,11 +350,19 @@ def think_and_act(trigger: str, title: str, situation: str) -> bool:
 def _think_and_act(trigger: str, title: str, situation: str) -> bool:
     run_id = runs.start(trigger, title)
     _ctx.run_id = run_id
+    _current["run"] = run_id
+    try:
+        decls, via_mcp = mcp_discover(), True
+        runs.step(run_id, "ok", f"Connected to the StudyPilot MCP server: {len(decls)} tools discovered "
+                                "(Calendar, Classroom, Drive, notes, alerts).")
+    except Exception as e:
+        decls, via_mcp = _decls(), False
+        runs.step(run_id, "warn", f"MCP server unreachable ({type(e).__name__}), calling tools directly.")
     now = datetime.now(TZ).strftime("%A %d %b %Y %H:%M")
     contents = [types.Content(role="user", parts=[types.Part(text=f"Now: {now}\n\nSITUATION:\n{situation}")])]
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM, temperature=0.2,
-        tools=[types.Tool(function_declarations=_decls())],
+        tools=[types.Tool(function_declarations=decls)],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
     notified, summary, acted = False, "", False
     started = time.time()
@@ -338,11 +387,16 @@ def _think_and_act(trigger: str, title: str, situation: str) -> bool:
             replies = []
             for fc in calls:
                 args = dict(fc.args or {})
-                runs.step(run_id, "act", _human(fc.name, args))
+                runs.step(run_id, "act", ("MCP → " if via_mcp else "") + _human(fc.name, args))
                 acted = True
                 fn = TOOL_MAP.get(fc.name)
                 try:
-                    out = fn(**args) if fn else {"error": f"unknown tool {fc.name}"}
+                    if not fn:
+                        out = {"error": f"unknown tool {fc.name}"}
+                    elif via_mcp:
+                        out = mcp_call(fc.name, args)
+                    else:
+                        out = fn(**args)
                 except Exception as e:
                     out = {"error": str(e)}
                     runs.step(run_id, "warn", f"{fc.name} failed: {e}")
@@ -375,3 +429,4 @@ def _think_and_act(trigger: str, title: str, situation: str) -> bool:
         return False
     finally:
         _ctx.run_id = None
+        _current["run"] = None

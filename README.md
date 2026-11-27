@@ -50,6 +50,20 @@ Built for **Google AI Agent-a-thon 2026, FAST University (CFD campus).**
  Student ─▶ ADK chat agent / Gemini Live voice agent ─▶ same tools
 ```
 
+### MCP: how the agent reaches its tools
+
+The Coordinator's tools (deadlines, Calendar planning, prep packs, notes, alerts) are served by StudyPilot's own **MCP server** (`backend/mcp_server.py`, Python MCP SDK, Streamable HTTP at `/mcp/`).
+
+1. **Trigger.** Something happens: a calendar clash, a weak quiz, a teacher change, or a missed session.
+2. **Discovery.** The Coordinator connects to the MCP server and calls `tools/list`, which returns 16 tools. Their schemas become Gemini's function declarations.
+3. **Decision to call.** Each step Gemini decides on (for example "move this session", "find a free slot", "verify the calendar") is sent to the MCP server as a `tools/call` request.
+4. **Action.** The server runs the tool against Google Calendar, Classroom, Drive or Gmail and returns the result. Gemini reads it and decides the next step.
+5. **Logging.** Each call appears in the Decisions panel with an **MCP** tag. The System check confirms the server is up.
+
+Example: a calendar clash leads to `get_deadline → sessions_between → find_free_slot → move_session → verify_calendar → notify_student`, all through MCP.
+
+The endpoint only accepts calls from StudyPilot itself; requests from the internet get `403`. If the server is ever unreachable, the agent calls the same tools directly, so a run never fails.
+
 **Safety:** Classroom, Drive and Gmail are read-only. It never submits work and never sends email. It only edits Calendar events tagged `extendedProperties.private.studypilot=true`, plus events the student edits themselves in the in-app calendar. In Drive it only writes inside its own StudyPilot folder.
 
 **Reliability:** every Google or Gemini call retries with exponential backoff. If Classroom is unreachable, it shows cached data. Invalid JSON gets one stricter retry. Missing due dates are asked of the student, never guessed. All analyses are cached in SQLite, so no file is analyzed twice.
@@ -81,7 +95,7 @@ After the first setup, `.\start.ps1` starts both servers in one go. Before a dem
 - All model IDs live in `backend/.env`, never in code.
 
 ## Tech
-Python · FastAPI · Google ADK · google-genai (Gemini Flash + Gemini Live) · Classroom / Drive / Calendar / YouTube APIs · SQLite · React · Vite · Tailwind
+Python · FastAPI · Google ADK · MCP (Python SDK) · google-genai (Gemini Flash + Gemini Live) · Classroom / Drive / Calendar / YouTube APIs · SQLite · React · Vite · Tailwind
 
 ## Roadmap
 WhatsApp alerts once Meta verifies the business, a teacher dashboard, group study, and a mobile app.

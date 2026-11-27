@@ -172,7 +172,14 @@ def _coach():
             + ("learning" if h["learning"] else "learned") + f" · {len(coach.reviews())} review quiz(zes) scheduled")
 
 
+def _mcp():
+    from agents import brain
+    decls = brain.mcp_discover()
+    return f"{len(decls)} agent tools served at /mcp/ (Streamable HTTP), discovered via tools/list"
+
+
 FIXES = {
+    "MCP server": "Restart the backend; the agents fall back to calling tools directly meanwhile.",
     "Google sign-in": "Click Sign in again (testing-mode Google tokens expire after 7 days).",
     "Classroom": "Check the internet connection, then sign in again.",
     "Google Calendar": "Check the internet connection, then sign in again.",
@@ -196,7 +203,7 @@ def run_all():
                for i, m in enumerate(MODEL_CHAIN[:3])]
     checks += [("Voice (Gemini Live)", _live_check), ("YouTube", _youtube), ("Phone alerts", _alerts),
                ("Background sync", _sync), ("Pre-built content", _cache), ("Gmail drafts", _drafts),
-               ("Internship agent", _career), ("Coach (nightly review)", _coach)]
+               ("Internship agent", _career), ("Coach (nightly review)", _coach), ("MCP server", _mcp)]
     out = []
     pool = ThreadPoolExecutor(max_workers=len(checks))
     futures = [(name, pool.submit(_timed, fn)) for name, fn in checks]
