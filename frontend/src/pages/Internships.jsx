@@ -254,6 +254,33 @@ function Detail({ it, canDraft, reload }) {
   )
 }
 
+function ApplicationPanel({ it, canDraft, reload, onClose }) {
+  useEffect(() => {
+    const esc = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [onClose])
+  return (
+    <div className="fixed inset-0 z-50" role="dialog" aria-label={`${it.title} at ${it.company}`}>
+      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
+      <div className="absolute right-0 inset-y-0 w-full max-w-[760px] bg-white shadow-2xl overflow-y-auto slide-in">
+        <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-200 px-6 py-4 flex items-start gap-3 z-10">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-500">{it.company} · {it.location || '—'} · {it.source}</p>
+            <h2 className="text-xl font-extrabold leading-snug">{it.title}</h2>
+            {it.reasoning && <p className="text-sm text-slate-600 mt-1">{it.reasoning}</p>}
+          </div>
+          <ScoreBadge score={it.score} />
+          <button className="btn-ghost !p-2" onClick={onClose} aria-label="Close"><X size={20} /></button>
+        </div>
+        <div className="px-6 pb-8 -mt-2">
+          <Detail it={it} canDraft={canDraft} reload={reload} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Card({ it, open, onToggle, canDraft, reload }) {
   return (
     <div className={`card !p-4 ${open ? 'ring-2 ring-indigo-300' : ''}`}>
@@ -266,7 +293,7 @@ function Card({ it, open, onToggle, canDraft, reload }) {
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <ScoreBadge score={it.score} />
-            {open ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
+            <ChevronDown size={18} className="text-slate-400 -rotate-90" />
           </div>
         </div>
         <div className="mt-2 flex gap-2 flex-wrap items-center">
@@ -276,7 +303,6 @@ function Card({ it, open, onToggle, canDraft, reload }) {
         </div>
         {it.reasoning && <p className="text-sm text-slate-600 mt-2 line-clamp-2">{it.reasoning}</p>}
       </button>
-      {open && <Detail it={it} canDraft={canDraft} reload={reload} />}
     </div>
   )
 }
@@ -318,6 +344,7 @@ export default function Internships() {
     .filter((q) => !(q in (data.answers || {})))
   const toggle = (id) => setOpen(open === id ? null : id)
 
+  const openItem = items.find((it) => it.id === open)
   return (
     <div className="space-y-5">
       <div className="card flex items-center gap-5 flex-wrap">
@@ -434,6 +461,7 @@ export default function Internships() {
           )}
         </div>
       )}
+      {openItem && <ApplicationPanel it={openItem} canDraft={data.can_draft} reload={load} onClose={() => setOpen(null)} />}
     </div>
   )
 }
