@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build + (re)start StudyPilot. Also use this after every `git pull`.
 # Works on any Linux server (Google Cloud, Azure, ...).
-# Domain: DOMAIN=... the first time (it is remembered in deploy/.domain), else <ip-with-dashes>.sslip.io
+# Domain: DOMAIN=... the first time (remembered in deploy/.env), else <ip-with-dashes>.sslip.io
 set -euo pipefail
 cd "$(dirname "$0")"
 for f in ../backend/.env ../backend/credentials.json; do
@@ -14,14 +14,18 @@ public_ip() {
   || curl -s -m 5 https://api.ipify.org
 }
 
+# deploy/.env is read automatically by every `docker compose` command (restart, logs, stop...)
 if [ -n "${DOMAIN:-}" ]; then
-  echo "$DOMAIN" > .domain                      # remember it for next time
+  echo "DOMAIN=$DOMAIN" > .env                  # remember it for next time
+elif [ -f .env ]; then
+  DOMAIN=$(sed -n 's/^DOMAIN=//p' .env)
 elif [ -f .domain ]; then
   DOMAIN=$(cat .domain)
 else
   IP=$(public_ip)
   DOMAIN="${IP//./-}.sslip.io"
 fi
+echo "DOMAIN=$DOMAIN" > .env
 export DOMAIN
 echo "Starting StudyPilot at https://$DOMAIN"
 sudo DOMAIN="$DOMAIN" docker compose up -d --build

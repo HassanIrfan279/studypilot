@@ -13,3 +13,4 @@ dist/
 cache/
 backend/cv.pdf
 deploy/.domain
+deploy/.env
