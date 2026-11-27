@@ -10,7 +10,11 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Some networks stall the large post-quantum TLS handshake of the image's OpenSSL 3.5 when talking
+# to PyPI. Use classic key exchange for the package download only (the running app is unaffected).
+RUN printf 'openssl_conf = i\n[i]\nssl_conf = s\n[s]\nsystem_default = d\n[d]\nGroups = X25519:P-256:P-384\n' > /tmp/pip-ssl.cnf \
+ && OPENSSL_CONF=/tmp/pip-ssl.cnf pip install --no-cache-dir -r requirements.txt \
+ && rm /tmp/pip-ssl.cnf
 COPY backend/ ./
 COPY --from=web /web/dist /app/frontend/dist
 # Render / Cloud Run pass the port in $PORT
