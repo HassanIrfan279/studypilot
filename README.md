@@ -92,6 +92,6 @@ The `Dockerfile` builds the React app and serves it from FastAPI, so the whole a
 `deploy/` runs it on a free Google Compute Engine e2-micro VM behind Caddy (automatic HTTPS), with the
 database on a persistent volume (`DATA_DIR=/data`) so the Google sign-in survives restarts and updates.
 
-Step-by-step guide: **[DEPLOY.md](DEPLOY.md)**. In short: create the VM, add
+Step-by-step guides: **[DEPLOY.md](DEPLOY.md)** (Google Cloud) and **[DEPLOY-AZURE.md](DEPLOY-AZURE.md)** (Azure VM; the same scripts work on any Linux server). In short: create the VM, add
 `https://<ip-with-dashes>.sslip.io/auth/callback` to the OAuth client, run `deploy/setup-vm.sh`,
 upload `.env` + `credentials.json`, run `deploy/start.sh`.

@@ -1,5 +1,7 @@
 # Deploy StudyPilot to Google Cloud (step by step)
 
+> Using **Azure** credits instead? Follow **[DEPLOY-AZURE.md](DEPLOY-AZURE.md)**: same app, same scripts.
+
 **What you'll have at the end:** StudyPilot running 24/7 at a real HTTPS web address, like
 `https://34-123-45-67.sslip.io`.
 - The agents keep working while your laptop is off: sync, nightly review, internship hunt, phone alerts.
@@ -91,7 +93,7 @@ That's your free domain. sslip.io is a free service that points this name at you
 4. Wait 2–4 minutes. It installs Docker, adds 2 GB of swap memory, and downloads StudyPilot from
    GitHub. It ends with:
    ```
-   Setup done. Your free domain is:  34-123-45-67.sslip.io
+   Setup done. Server IP: 34.123.45.67  (free sslip.io domain: 34-123-45-67.sslip.io)
    ```
    Check that it matches Step 3.
 
